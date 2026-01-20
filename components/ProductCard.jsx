@@ -134,7 +134,7 @@ const ProductCard = ({ product }) => {
                 <div className={`relative w-full bg-gray-50 overflow-hidden ${getAspectRatioClass(product.aspectRatio)}`}>
                     {hasFastDelivery && (
                         <span className="absolute top-3 left-3 bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm z-20 pointer-events-none">
-                            Fast Delivery
+                            Fast
                         </span>
                     )}
                     {discount > 0 && (
