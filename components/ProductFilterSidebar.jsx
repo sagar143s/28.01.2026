@@ -72,7 +72,10 @@ export default function ProductFilterSidebar({
   }, [products]);
 
   useEffect(() => {
-    onFilterChange({ ...filters, sortBy });
+    const timer = setTimeout(() => {
+      onFilterChange({ ...filters, sortBy });
+    }, 300);
+    return () => clearTimeout(timer);
   }, [filters, sortBy, onFilterChange]);
 
   const toggleSection = (section) => {

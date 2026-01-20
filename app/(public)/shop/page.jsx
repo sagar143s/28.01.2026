@@ -1,74 +1,62 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useMemo, useState, useCallback } from "react";
 import ProductCard from "@/components/ProductCard"
 import ProductFilterSidebar from "@/components/ProductFilterSidebar"
-import { MoveLeftIcon } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSelector } from "react-redux"
 
- function ShopContent() {
-    // get query params ?search=abc
+function ShopContent() {
     const searchParams = useSearchParams();
     const search = searchParams.get('search');
     const category = searchParams.get('category');
     const router = useRouter();
     const products = useSelector(state => state.product.list);
-    const [activeFilters, setActiveFilters] = useState({});
-    const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
-
-    // Debug: Log AI keyword and product names
-    useEffect(() => {
-        if (search && products?.length) {
-            console.log('AI keyword:', search);
-            console.log('Product names:', products.map(p => p.name));
-            // Log Levenshtein scores for each product
-            const searchTerm = search.toLowerCase();
-            products.forEach(product => {
-                const score = levenshtein(product.name.toLowerCase(), searchTerm);
-                console.log(`Product: ${product.name}, Score: ${score}`);
-            });
-        }
-    }, [search, products]);
+    
+    const [activeFilters, setActiveFilters] = useState({
+        categories: [],
+        priceRange: { min: 0, max: 100000 },
+        rating: 0,
+        inStock: false,
+        sortBy: 'popularity'
+    });
 
     // Fuzzy match helper (Levenshtein distance)
-    function levenshtein(a, b) {
-      const matrix = Array(a.length + 1).fill(null).map(() => Array(b.length + 1).fill(null));
-      for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
-      for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
-      for (let i = 1; i <= a.length; i++) {
-        for (let j = 1; j <= b.length; j++) {
-          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j - 1] + cost
-          );
+    const levenshtein = (a, b) => {
+        const matrix = Array(a.length + 1).fill(null).map(() => Array(b.length + 1).fill(null));
+        for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+        for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= a.length; i++) {
+            for (let j = 1; j <= b.length; j++) {
+                const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j - 1] + cost
+                );
+            }
         }
-      }
-      return matrix[a.length][b.length];
-    }
+        return matrix[a.length][b.length];
+    };
 
-    const applyFilters = (productsToFilter) => {
+    // Apply filters
+    const applyFilters = useCallback((productsToFilter) => {
         return productsToFilter.filter(product => {
             // Fuzzy match for search
             if (search) {
                 const productName = product.name.toLowerCase();
                 const searchTerm = search.toLowerCase();
-                // Substring match or Levenshtein distance <= 2
                 if (!productName.includes(searchTerm) && levenshtein(productName, searchTerm) > 2) {
                     return false;
                 }
             }
-            
+
             // Category matching (from URL param)
             if (category) {
                 const productCategory = product.category?.toLowerCase() || '';
                 const categorySlug = category.toLowerCase();
-                // Convert both to comparable formats
                 const productCategorySlug = productCategory.replace(/\s+/g, '-').replace(/[^\w-]/g, '');
                 const productCategoryWords = productCategory.replace(/[^\w\s]/g, '').split(/\s+/);
                 const searchWords = categorySlug.split('-');
-                // Match if: exact slug match OR category contains all search words OR search is contained in category
                 const exactMatch = productCategorySlug === categorySlug;
                 const containsAllWords = searchWords.every(word => 
                     productCategoryWords.some(catWord => catWord.includes(word) || word.includes(catWord))
@@ -79,78 +67,140 @@ import { useSelector } from "react-redux"
                     return false;
                 }
             }
+
+            // Filter by selected categories from sidebar
+            if (activeFilters.categories.length > 0) {
+                const productCategories = [
+                    product.category,
+                    ...(Array.isArray(product.categories) ? product.categories : [])
+                ].filter(Boolean);
+                
+                const hasMatchingCategory = productCategories.some(cat => 
+                    activeFilters.categories.includes(cat)
+                );
+                if (!hasMatchingCategory) return false;
+            }
+
+            // Filter by price range
+            if (product.price < activeFilters.priceRange.min || product.price > activeFilters.priceRange.max) {
+                return false;
+            }
+
+            // Filter by rating
+            if (activeFilters.rating > 0) {
+                const avgRating = product.averageRating || 0;
+                if (avgRating < activeFilters.rating) return false;
+            }
+
+            // Filter by stock availability
+            if (activeFilters.inStock && product.inStock === false) {
+                return false;
+            }
+
             return true;
         });
-    };
+    }, [activeFilters, search, category, levenshtein]);
 
-    const filteredProducts = applyFilters(products);
+    // Apply sorting
+    const sortProducts = useCallback((productsToSort) => {
+        const sorted = [...productsToSort];
+        
+        switch (activeFilters.sortBy) {
+            case 'price-low-high':
+                return sorted.sort((a, b) => a.price - b.price);
+            case 'price-high-low':
+                return sorted.sort((a, b) => b.price - a.price);
+            case 'newest':
+                return sorted.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            case 'rating':
+                return sorted.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
+            case 'discount':
+                return sorted.sort((a, b) => {
+                    const discountA = a.mrp > a.price ? ((a.mrp - a.price) / a.mrp * 100) : 0;
+                    const discountB = b.mrp > b.price ? ((b.mrp - b.price) / b.mrp * 100) : 0;
+                    return discountB - discountA;
+                });
+            case 'popularity':
+            default:
+                return sorted.sort((a, b) => {
+                    const aRatings = a.rating?.length || 0;
+                    const bRatings = b.rating?.length || 0;
+                    return bRatings - aRatings;
+                });
+        }
+    }, [activeFilters.sortBy]);
+
+    const filteredAndSortedProducts = useMemo(() => {
+        const filtered = applyFilters(products);
+        return sortProducts(filtered);
+    }, [products, applyFilters, sortProducts]);
+
+    const handleFilterChange = useCallback((filters) => {
+        setActiveFilters(filters);
+    }, []);
+
     const pageTitle = category 
         ? category.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
         : 'All Products';
 
-    const handleFilterChange = (filters) => {
-        setActiveFilters(filters);
-    };
-
     return (
-        <div className="min-h-[70vh] bg-white">
-            <div className="max-w-[1250px] mx-auto px-4 py-6">
-                {/* Back Navigation */}
-                {(search || category) && (
-                    <button 
-                        onClick={() => router.push('/shop')}
-                        className="flex items-center gap-2 text-gray-700 hover:text-black mb-6 transition-colors"
-                    >
-                        <MoveLeftIcon size={20} />
-                        <span>Back</span>
-                    </button>
-                )}
+        <div className="min-h-screen bg-gray-50">
+            <div className="max-w-[1250px] mx-auto px-4 py-8">
+                {/* Header */}
+                <div className="mb-6 mt-6">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                        {category ? `${pageTitle}` : search ? `Search: ${search}` : 'All Products'}
+                    </h1>
+                    <p className="text-gray-600">
+                        {category ? `Browse our ${pageTitle} collection` : search ? `Results for "${search}"` : 'Discover our complete product collection'}
+                    </p>
+                </div>
 
-                <div className="flex gap-8">
-                    {/* Filter Sidebar - Hidden on mobile */}
-                    <div className="hidden lg:block w-64 flex-shrink-0">
-                        <ProductFilterSidebar
+                <div className="flex gap-6">
+                    {/* Filter Sidebar */}
+                    <div className="hidden lg:block flex-shrink-0">
+                        <ProductFilterSidebar 
+                            products={products} 
                             onFilterChange={handleFilterChange}
-                            selectedFilters={activeFilters}
                         />
                     </div>
 
-                    {/* Products Section */}
-                    <div className="flex-1 min-w-0">
-                        <h1 className="text-3xl font-bold mb-8 text-gray-900">
-                            {category ? (
-                                <>Category: <span className="text-slate-700">{pageTitle}</span></>
-                            ) : search ? (
-                                <>Search: <span className="text-slate-700">{search}</span></>
-                            ) : (
-                                <>All <span className="text-slate-700">Products</span></>
-                            )}
-                        </h1>
-
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6 mb-32">
-                            {filteredProducts.length > 0 ? (
-                                filteredProducts.map((product, idx) => (
-                                    <ProductCard key={product._id || product.id || idx} product={product} />
-                                ))
-                            ) : (
-                                <div className="col-span-full text-center py-12">
-                                    <p className="text-gray-500 text-lg">No products found</p>
-                                    <button 
-                                        onClick={() => router.push('/shop')}
-                                        className="mt-4 px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
-                                    >
-                                        View All Products
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                    {/* Products Grid */}
+                    <div className="flex-1">
+                        {filteredAndSortedProducts.length === 0 ? (
+                            <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
+                                <p className="text-gray-500 text-lg">No products match your filters.</p>
+                                <button 
+                                    onClick={() => {
+                                        setActiveFilters({
+                                            categories: [],
+                                            priceRange: { min: 0, max: 100000 },
+                                            rating: 0,
+                                            inStock: false,
+                                            sortBy: 'popularity'
+                                        });
+                                        if (category || search) {
+                                            router.push('/shop');
+                                        }
+                                    }}
+                                    className="mt-4 px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                                >
+                                    Clear Filters
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-6">
+                                {filteredAndSortedProducts.map((product) => (
+                                    <ProductCard key={product._id || product.id} product={product} />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
         </div>
-    )
+    );
 }
-
 
 export default function Shop() {
   return (

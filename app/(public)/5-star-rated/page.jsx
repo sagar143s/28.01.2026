@@ -107,7 +107,7 @@ export default function FiveStarRated() {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-[60vh]">
+            <div className="max-w-[1250px] mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-[60vh]">
                 {/* Header */}
                 <div className="mb-8">
                     <div className="flex items-center gap-3 mb-3">
