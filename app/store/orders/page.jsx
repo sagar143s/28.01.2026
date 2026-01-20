@@ -1,0 +1,1061 @@
+"use client";
+
+// Update order status
+const updateOrderStatus = async (orderId, newStatus, getToken, fetchOrders) => {
+    try {
+        const token = await getToken(true); // Force refresh token
+        if (!token) {
+            toast.error('Authentication failed. Please sign in again.');
+            return;
+        }
+        await axios.post('/api/store/orders/update-status', {
+            orderId,
+            status: newStatus
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success('Order status updated!');
+        fetchOrders();
+    } catch (error) {
+        console.error('Update status error:', error);
+        toast.error(error?.response?.data?.error || 'Failed to update status');
+    }
+};
+import { useAuth } from '@/lib/useAuth';
+export const dynamic = 'force-dynamic'
+import { useEffect, useState, useRef } from "react"
+import Loading from "@/components/Loading"
+
+import axios from "axios"
+import toast from "react-hot-toast"
+import { Package, Truck, X, Download, Printer, RefreshCw, MapPin } from "lucide-react"
+import { downloadInvoice, printInvoice } from "@/lib/generateInvoice"
+import { downloadAwbBill } from "@/lib/generateAwbBill"
+import { schedulePickup } from '@/lib/delhivery'
+
+// Add updateTrackingDetails function
+// (must be inside the component, not top-level)
+
+
+
+
+export default function StoreOrders() {
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '₹';
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [trackingData, setTrackingData] = useState({
+        trackingId: '',
+        trackingUrl: '',
+        courier: ''
+    });
+    const [filterStatus, setFilterStatus] = useState('ALL');
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+    const [schedulingPickup, setSchedulingPickup] = useState(false);
+    const [sendingToDelhivery, setSendingToDelhivery] = useState(false);
+    const [refreshInterval, setRefreshInterval] = useState(30); // seconds
+    const refreshIntervalRef = useRef(null);
+
+    const { user, getToken, loading: authLoading } = useAuth();
+
+    // Status options available (aligned with customer dashboard and courier states)
+    const STATUS_OPTIONS = [
+        { value: 'ORDER_PLACED', label: 'Order Placed', color: 'bg-blue-100 text-blue-700' },
+        { value: 'PROCESSING', label: 'Processing', color: 'bg-yellow-100 text-yellow-700' },
+        { value: 'WAITING_FOR_PICKUP', label: 'Waiting For Pickup', color: 'bg-yellow-50 text-yellow-700' },
+        { value: 'PICKUP_REQUESTED', label: 'Pickup Requested', color: 'bg-yellow-100 text-yellow-700' },
+        { value: 'PICKED_UP', label: 'Picked Up', color: 'bg-purple-100 text-purple-700' },
+        { value: 'WAREHOUSE_RECEIVED', label: 'Warehouse Received', color: 'bg-indigo-100 text-indigo-700' },
+        { value: 'SHIPPED', label: 'Shipped / In Transit', color: 'bg-purple-100 text-purple-700' },
+        { value: 'OUT_FOR_DELIVERY', label: 'Out For Delivery', color: 'bg-teal-100 text-teal-700' },
+        { value: 'DELIVERED', label: 'Delivered', color: 'bg-green-100 text-green-700' },
+        { value: 'CANCELLED', label: 'Cancelled', color: 'bg-red-100 text-red-700' },
+        { value: 'PAYMENT_FAILED', label: 'Payment Failed', color: 'bg-orange-100 text-orange-700' },
+        { value: 'RETURNED', label: 'Returned', color: 'bg-indigo-100 text-indigo-700' },
+        { value: 'RETURN_INITIATED', label: 'Return Initiated', color: 'bg-pink-100 text-pink-700' },
+        { value: 'RETURN_APPROVED', label: 'Return Approved', color: 'bg-pink-100 text-pink-700' },
+    ];
+
+    // Map Delhivery live status (current_status + latest event) to internal order status
+    const mapDelhiveryStatusToOrderStatus = (delhivery, currentStatus) => {
+        if (!delhivery) return null;
+
+        const texts = [];
+        if (delhivery.current_status) {
+            texts.push(delhivery.current_status.toLowerCase());
+        }
+
+        if (Array.isArray(delhivery.events) && delhivery.events.length > 0) {
+            const latestEvent = delhivery.events[delhivery.events.length - 1];
+            if (latestEvent?.status) {
+                texts.push(latestEvent.status.toLowerCase());
+            }
+        }
+
+        if (texts.length === 0) return null;
+        const combined = texts.join(' | ');
+
+        if (combined.includes('delivered')) return 'DELIVERED';
+        if (combined.includes('out for delivery')) return 'OUT_FOR_DELIVERY';
+        if (combined.includes('picked up') || combined.includes('picked-up')) return 'PICKED_UP';
+        if (combined.includes('pickup requested')) return 'PICKUP_REQUESTED';
+        if (combined.includes('waiting for pickup')) return 'WAITING_FOR_PICKUP';
+        if (combined.includes('warehouse') || combined.includes('hub')) return 'WAREHOUSE_RECEIVED';
+
+        // Treat generic "pending" as order is being processed
+        if (combined.includes('pending')) {
+            if (currentStatus === 'ORDER_PLACED') return 'PROCESSING';
+            return currentStatus;
+        }
+
+        if (
+            combined.includes('in transit') ||
+            combined.includes('dispatched') ||
+            combined.includes('shipped') ||
+            combined.includes('forwarded')
+        ) {
+            if (
+                currentStatus === 'ORDER_PLACED' ||
+                currentStatus === 'PROCESSING' ||
+                currentStatus === 'WAITING_FOR_PICKUP' ||
+                currentStatus === 'PICKUP_REQUESTED'
+            ) {
+                return 'SHIPPED';
+            }
+        }
+
+        return null;
+    };
+
+    // Get status color
+    const getStatusColor = (status) => {
+        const statusOption = STATUS_OPTIONS.find(s => s.value === status);
+        return statusOption?.color || 'bg-gray-100 text-gray-700';
+    };
+
+    // Calculate order statistics
+    const getOrderStats = () => {
+        const stats = {
+            TOTAL: orders.length,
+            ORDER_PLACED: orders.filter(o => o.status === 'ORDER_PLACED').length,
+            PROCESSING: orders.filter(o => o.status === 'PROCESSING').length,
+            SHIPPED: orders.filter(o => o.status === 'SHIPPED').length,
+            DELIVERED: orders.filter(o => o.status === 'DELIVERED').length,
+            CANCELLED: orders.filter(o => o.status === 'CANCELLED').length,
+            PAYMENT_FAILED: orders.filter(o => o.status === 'PAYMENT_FAILED').length,
+            RETURNED: orders.filter(o => o.status === 'RETURNED').length,
+            PENDING_PAYMENT: orders.filter(o => !o.isPaid).length,
+            PENDING_SHIPMENT: orders.filter(o => !o.trackingId && ['ORDER_PLACED', 'PROCESSING'].includes(o.status)).length,
+        };
+        return stats;
+    };
+    // Filter orders based on selected status
+    const getFilteredOrders = () => {
+        if (filterStatus === 'ALL') return orders;
+        if (filterStatus === 'PENDING_PAYMENT') return orders.filter(o => !o.isPaid);
+        if (filterStatus === 'PENDING_SHIPMENT') return orders.filter(o => !o.trackingId && ['ORDER_PLACED', 'PROCESSING'].includes(o.status));
+        return orders.filter(o => o.status === filterStatus);
+    };
+
+    const stats = getOrderStats();
+    const filteredOrders = getFilteredOrders();
+
+    // Function to update tracking details (AWB), auto-set status and notify customer
+    const updateTrackingDetails = async () => {
+        if (!selectedOrder) return;
+
+        const awb = (trackingData.trackingId || '').trim();
+        let courierName = (trackingData.courier || selectedOrder?.courier || '').trim();
+        let trackingUrl = (trackingData.trackingUrl || '').trim();
+
+        if (!awb) {
+            toast.error('AWB / Tracking ID is required');
+            return;
+        }
+
+        // If courier is not set, assume Delhivery (for AWB-based tracking)
+        if (!courierName) {
+            courierName = 'Delhivery';
+        }
+
+        // For Delhivery, if no tracking URL entered, auto-generate using AWB
+        if (!trackingUrl && courierName.toLowerCase() === 'delhivery') {
+            trackingUrl = `https://www.delhivery.com/track-v2/package/${encodeURIComponent(awb)}`;
+        }
+
+        // Auto-move status forward when tracking is added
+        // If the order is still ORDER_PLACED or PROCESSING, treat it as SHIPPED
+        let nextStatus = selectedOrder.status;
+        if (nextStatus === 'ORDER_PLACED' || nextStatus === 'PROCESSING') {
+            nextStatus = 'SHIPPED';
+        }
+        
+        try {
+            const token = await getToken();
+            await axios.put(`/api/store/orders/${selectedOrder._id}`, {
+                status: nextStatus,
+                trackingId: awb,
+                trackingUrl,
+                courier: courierName
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.success('Tracking details updated, status set to Shipped & customer notified!');
+
+            // Refresh orders list
+            await fetchOrders();
+
+            // Update selectedOrder locally so UI + Delhivery auto-refresh work immediately
+            setSelectedOrder(prev => prev ? {
+                ...prev,
+                status: nextStatus,
+                trackingId: awb,
+                courier: courierName,
+                trackingUrl
+            } : prev);
+
+            // Trigger an immediate Delhivery refresh (if Delhivery courier)
+            if (courierName.toLowerCase() === 'delhivery') {
+                try {
+                    await refreshTrackingData();
+                } catch {
+                    // ignore refresh errors here; UI will still have AWB saved
+                }
+            }
+        } catch (error) {
+            console.error('Failed to update tracking:', error);
+            toast.error(error?.response?.data?.error || 'Failed to update tracking details');
+        }
+    };
+
+    // Manually trigger automatic status sync from latest courier tracking
+    const autoSyncStatusFromTracking = async (targetOrder) => {
+        const order = targetOrder || selectedOrder;
+
+        if (!order || !order.trackingId) {
+            toast.error('Add a tracking ID first');
+            return;
+        }
+        try {
+            const token = await getToken();
+            const { data } = await axios.get(`/api/track-order?awb=${order.trackingId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (!data.order || !data.order.delhivery) {
+                toast.error('No live courier status found yet. Try again later.');
+                return;
+            }
+
+            const currentStatus = data.order.status || order.status;
+            const mappedStatus = mapDelhiveryStatusToOrderStatus(data.order.delhivery, currentStatus);
+
+            if (!mappedStatus || mappedStatus === currentStatus) {
+                toast.error('Status is already up to date with tracking.');
+                return;
+            }
+
+            await axios.post('/api/store/orders/update-status', {
+                orderId: order._id,
+                status: mappedStatus
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // Update local state so UI reflects the change immediately
+            setSelectedOrder(prev => prev && prev._id === order._id ? { ...prev, status: mappedStatus } : prev);
+            setOrders(prev => prev.map(o => o._id === order._id ? { ...o, status: mappedStatus } : o));
+
+            toast.success(`Order status set to "${mappedStatus}" from tracking.`);
+        } catch (error) {
+            console.error('Auto status sync failed:', error);
+            toast.error(error?.response?.data?.error || 'Failed to auto-sync status from tracking');
+        }
+    };
+    // Move openModal and closeModal to top level
+    const openModal = (order) => {
+        console.log('[MODAL DEBUG] Opening order:', order);
+        console.log('[MODAL DEBUG] Order shippingAddress:', order.shippingAddress);
+        console.log('[MODAL DEBUG] Order userId type:', typeof order.userId);
+        console.log('[MODAL DEBUG] Order userId value:', order.userId);
+        console.log('[MODAL DEBUG] Order userId is object?:', typeof order.userId === 'object');
+        if (typeof order.userId === 'object' && order.userId !== null) {
+            console.log('[MODAL DEBUG] User name:', order.userId.name);
+            console.log('[MODAL DEBUG] User email:', order.userId.email);
+        }
+        console.log('[MODAL DEBUG] Order addressId:', order.addressId);
+        console.log('[MODAL DEBUG] Order isGuest:', order.isGuest);
+        setSelectedOrder(order);
+        // Pre-fill tracking data if it exists
+        setTrackingData({
+            trackingId: order.trackingId || '',
+            trackingUrl: order.trackingUrl || '',
+            courier: order.courier || ''
+        });
+        setIsModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setSelectedOrder(null);
+        // Reset tracking data
+        setTrackingData({
+            trackingId: '',
+            trackingUrl: '',
+            courier: ''
+        });
+    };
+
+    const fetchOrders = async () => {
+        try {
+            const token = await getToken();
+            if (!token) {
+                toast.error("Invalid session. Please sign in again.");
+                setLoading(false);
+                return;
+            }
+            const { data } = await axios.get('/api/store/orders', {headers: { Authorization: `Bearer ${token}` }});
+            console.log('[ORDERS DEBUG] Raw orders data:', data.orders);
+
+            let syncedOrders = data.orders || [];
+
+            // One-time client-side sync: if Delhivery says "out for delivery" / "delivered" etc.
+            // but order.status is still ORDER_PLACED/PROCESSING/CANCELLED, bump status to match
+            // and persist the change back to the backend so customer views stay in sync.
+            const updatesToPersist = [];
+            syncedOrders = syncedOrders.map(order => {
+                const mapped = mapDelhiveryStatusToOrderStatus(order.delhivery, order.status);
+                if (mapped && mapped !== order.status) {
+                    updatesToPersist.push({ orderId: order._id, status: mapped });
+                    return { ...order, status: mapped };
+                }
+                return order;
+            });
+
+            if (syncedOrders.length > 0) {
+                console.log('[ORDERS DEBUG] First synced order sample:', JSON.stringify(syncedOrders[0], null, 2));
+            }
+
+            // Persist any mapped statuses silently (no toast spam)
+            if (updatesToPersist.length > 0) {
+                try {
+                    await Promise.all(
+                        updatesToPersist.map(update =>
+                            axios.post('/api/store/orders/update-status', update, {
+                                headers: { Authorization: `Bearer ${token}` }
+                            })
+                        )
+                    );
+                } catch (statusSyncError) {
+                    console.error('Failed to persist auto-mapped statuses:', statusSyncError);
+                }
+            }
+
+            setOrders(syncedOrders);
+        } catch (error) {
+            toast.error(error?.response?.data?.error || error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (authLoading) return; // Wait for auth to load
+        if (!user) {
+            toast.error("You must be signed in as a seller to view orders.");
+            setLoading(false);
+            return;
+        }
+        fetchOrders();
+        // eslint-disable-next-line
+    }, [authLoading, user]);
+
+    // Auto-refresh tracking data
+    useEffect(() => {
+        if (autoRefreshEnabled && selectedOrder?.trackingId) {
+            refreshIntervalRef.current = setInterval(() => {
+                refreshTrackingData();
+            }, refreshInterval * 1000);
+        }
+        return () => {
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+            }
+        };
+    }, [autoRefreshEnabled, selectedOrder, refreshInterval]);
+
+    const refreshTrackingData = async () => {
+        if (!selectedOrder || !selectedOrder.trackingId) return;
+        try {
+            const token = await getToken();
+            const { data } = await axios.get(`/api/track-order?awb=${selectedOrder.trackingId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (data.order) {
+                // Optionally sync internal order.status with Delhivery live status
+                const mappedStatus = mapDelhiveryStatusToOrderStatus(
+                    data.order.delhivery,
+                    selectedOrder.status || data.order.status
+                );
+
+                if (mappedStatus && mappedStatus !== (selectedOrder.status || data.order.status)) {
+                    try {
+                        // Persist new status silently (no toast spam during auto-refresh)
+                        await axios.post('/api/store/orders/update-status', {
+                            orderId: selectedOrder._id,
+                            status: mappedStatus
+                        }, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+
+                        data.order.status = mappedStatus;
+                    } catch (statusError) {
+                        console.error('Failed to sync status from Delhivery:', statusError);
+                    }
+                }
+
+                // Update the selected order with fresh tracking data
+                setSelectedOrder(prev => ({
+                    ...prev,
+                    ...data.order,
+                    delhivery: data.order.delhivery || prev.delhivery
+                }));
+                // Also update in orders list
+                setOrders(prev => prev.map(o => o._id === selectedOrder._id ? {...o, ...data.order} : o));
+            }
+        } catch (error) {
+            console.error('Failed to refresh tracking:', error);
+        }
+    };
+
+    const schedulePickupWithDelhivery = async () => {
+        if (!selectedOrder) return;
+        
+        if (!selectedOrder.trackingId) {
+            toast.error('Please add tracking ID first');
+            return;
+        }
+
+        setSchedulingPickup(true);
+        try {
+            const token = await getToken();
+            
+            // Call backend to schedule pickup
+            const { data } = await axios.post('/api/store/schedule-pickup', {
+                orderId: selectedOrder._id,
+                trackingId: selectedOrder.trackingId,
+                courierName: selectedOrder.courier || 'Delhivery',
+                shippingAddress: selectedOrder.shippingAddress,
+                shipmentWeight: 1, // kg - can be configurable
+                packageCount: selectedOrder.orderItems?.length || 1
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (data.success) {
+                toast.success(`✅ Pickup scheduled! ID: ${data.pickupId}`);
+                fetchOrders();
+            } else {
+                toast.error(data.error || 'Failed to schedule pickup');
+            }
+        } catch (error) {
+            console.error('Pickup scheduling error:', error);
+            toast.error(error?.response?.data?.error || 'Failed to schedule pickup with Delhivery');
+        } finally {
+            setSchedulingPickup(false);
+        }
+    };
+
+    const sendOrderToDelhivery = async () => {
+        if (!selectedOrder) return;
+
+        // Validate order can be sent to Delhivery
+        if (!selectedOrder.shippingAddress?.street || !selectedOrder.shippingAddress?.city) {
+            toast.error('Complete shipping address is required to send order to Delhivery');
+            return;
+        }
+
+        setSendingToDelhivery(true);
+        try {
+            const token = await getToken();
+            
+            // Call backend to send order to Delhivery
+            const { data } = await axios.post('/api/store/send-to-delhivery', {
+                orderId: selectedOrder._id
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (data.success) {
+                toast.success('✅ Order sent to Delhivery! Waiting for AWB assignment...');
+                fetchOrders();
+                // Refresh selected order
+                setSelectedOrder(prev => prev ? {...prev, sentToDelhivery: true, orderStatus: 'PENDING_ASSIGNMENT'} : null);
+            } else {
+                toast.error(data.error || 'Failed to send order to Delhivery');
+            }
+        } catch (error) {
+            console.error('Send to Delhivery error:', error);
+            toast.error(error?.response?.data?.error || 'Failed to send order to Delhivery');
+        } finally {
+            setSendingToDelhivery(false);
+        }
+    };
+
+
+    if (authLoading || loading) return <Loading />;
+
+    return (
+        <>
+            <h1 className="text-2xl text-slate-500 mb-6">Store <span className="text-slate-800 font-medium">Orders</span></h1>
+            
+            {/* Order Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <div 
+                    onClick={() => setFilterStatus('ALL')}
+                    className={`p-4 rounded-lg cursor-pointer transition-all ${filterStatus === 'ALL' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white border border-gray-200 text-slate-700'}`}
+                >
+                    <p className="text-xs opacity-75">Total Orders</p>
+                    <p className="text-2xl font-bold">{stats.TOTAL}</p>
+                </div>
+                <div 
+                    onClick={() => setFilterStatus('PENDING_PAYMENT')}
+                    className={`p-4 rounded-lg cursor-pointer transition-all ${filterStatus === 'PENDING_PAYMENT' ? 'bg-orange-600 text-white shadow-lg' : 'bg-white border border-gray-200 text-slate-700'}`}
+                >
+                    <p className="text-xs opacity-75">Pending Payment</p>
+                    <p className="text-2xl font-bold">{stats.PENDING_PAYMENT}</p>
+                </div>
+                <div 
+                    onClick={() => setFilterStatus('PROCESSING')}
+                    className={`p-4 rounded-lg cursor-pointer transition-all ${filterStatus === 'PROCESSING' ? 'bg-yellow-600 text-white shadow-lg' : 'bg-white border border-gray-200 text-slate-700'}`}
+                >
+                    <p className="text-xs opacity-75">Processing</p>
+                    <p className="text-2xl font-bold">{stats.PROCESSING}</p>
+                </div>
+                <div 
+                    onClick={() => setFilterStatus('SHIPPED')}
+                    className={`p-4 rounded-lg cursor-pointer transition-all ${filterStatus === 'SHIPPED' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white border border-gray-200 text-slate-700'}`}
+                >
+                    <p className="text-xs opacity-75">Shipped</p>
+                    <p className="text-2xl font-bold">{stats.SHIPPED}</p>
+                </div>
+                <div 
+                    onClick={() => setFilterStatus('DELIVERED')}
+                    className={`p-4 rounded-lg cursor-pointer transition-all ${filterStatus === 'DELIVERED' ? 'bg-green-600 text-white shadow-lg' : 'bg-white border border-gray-200 text-slate-700'}`}
+                >
+                    <p className="text-xs opacity-75">Delivered</p>
+                    <p className="text-2xl font-bold">{stats.DELIVERED}</p>
+                </div>
+            </div>
+
+            {/* Status Filter Tabs */}
+            <div className="mb-6 flex flex-wrap gap-2">
+                {['ALL', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'PAYMENT_FAILED', 'RETURNED'].map(status => (
+                    <button
+                        key={status}
+                        onClick={() => setFilterStatus(status)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                            filterStatus === status
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'bg-gray-100 text-slate-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        {status === 'ALL' ? 'All Orders' : status === 'PAYMENT_FAILED' ? 'Payment Failed' : status.replace(/_/g, ' ')}
+                    </button>
+                ))}
+            </div>
+
+            {filteredOrders.length === 0 ? (
+                <p className="text-center py-8 text-slate-500">No orders found for this status</p>
+            ) : (
+                <div className="overflow-x-auto w-full rounded-md shadow border border-gray-200">
+                    <table className="w-full text-sm text-left text-gray-600">
+                        <thead className="bg-gray-50 text-gray-700 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th className="px-4 py-3">Sr. No.</th>
+                                <th className="px-4 py-3">Order No.</th>
+                                <th className="px-4 py-3">Customer</th>
+                                <th className="px-4 py-3">Total</th>
+                                <th className="px-4 py-3">Payment</th>
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3">Tracking</th>
+                                <th className="px-4 py-3">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {filteredOrders.map((order, index) => (
+                                <tr
+                                    key={order._id}
+                                    className="hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
+                                    onClick={() => openModal(order)}
+                                >
+                                    <td className="pl-6 text-green-600 font-medium">{index + 1}</td>
+                                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{order.shortOrderNumber || order._id.slice(0, 8)}</td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="font-medium text-slate-800">
+                                                {order.isGuest 
+                                                    ? (order.guestName || 'Guest User')
+                                                    : (order.userId?.name || order.userId?.email || 'Unknown')}
+                                            </span>
+                                            {order.isGuest && (
+                                                <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full w-fit font-semibold">
+                                                    Guest
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 font-medium text-slate-800">{currency}{order.total}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${order.isPaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {order.isPaid ? '✓ Paid' : 'Pending'}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3" onClick={e => { e.stopPropagation(); }}>
+                                        <div className="flex items-center gap-2">
+                                            <select
+                                                value={order.status}
+                                                onChange={e => updateOrderStatus(order._id, e.target.value, getToken, fetchOrders)}
+                                                className={`border-gray-300 rounded-md text-sm font-medium px-2 py-1 focus:ring focus:ring-blue-200 ${getStatusColor(order.status)}`}
+                                            >
+                                                {STATUS_OPTIONS.map(status => (
+                                                    <option key={status.value} value={status.value}>{status.label}</option>
+                                                ))}
+                                            </select>
+                                            {order.trackingId && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => autoSyncStatusFromTracking(order)}
+                                                    className="text-xs font-semibold px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
+                                                    title="Auto-set status from latest tracking"
+                                                >
+                                                    Auto
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        {order.trackingId ? (
+                                            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-medium">
+                                                {order.trackingId.substring(0, 8)}...
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-400 text-xs">Not shipped</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-500 text-xs">{new Date(order.createdAt).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+            {isModalOpen && selectedOrder && (
+                <div onClick={closeModal} className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm text-slate-700 text-sm z-50 p-4" >
+                    <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-2xl font-bold mb-1">Order Details</h2>
+                                    <p className="text-blue-100 text-xs">Order ID: {String(selectedOrder._id).slice(0, 8).toUpperCase()} &nbsp;|&nbsp; Order No: <span className='font-mono text-white'>{selectedOrder.shortOrderNumber || selectedOrder._id.slice(0, 8)}</span></p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => downloadInvoice(selectedOrder)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors backdrop-blur-sm"
+                                        title="Download Invoice"
+                                    >
+                                        <Download size={18} />
+                                        <span className="text-sm">Download</span>
+                                    </button>
+                                    <button
+                                        onClick={() => printInvoice(selectedOrder)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors backdrop-blur-sm"
+                                        title="Print Invoice"
+                                    >
+                                        <Printer size={18} />
+                                        <span className="text-sm">Print</span>
+                                    </button>
+                                    <button
+                                        onClick={() => downloadAwbBill({
+                                            awbNumber: selectedOrder.trackingId,
+                                            orderId: selectedOrder._id,
+                                            courier: selectedOrder.courier,
+                                            date: selectedOrder.createdAt,
+                                            senderName: process.env.NEXT_PUBLIC_INVOICE_COMPANY_NAME || 'Qui',
+                                            senderAddress: `${process.env.NEXT_PUBLIC_INVOICE_ADDRESS_LINE1 || ''}, ${process.env.NEXT_PUBLIC_INVOICE_ADDRESS_LINE2 || ''}`,
+                                            senderPhone: process.env.NEXT_PUBLIC_INVOICE_CONTACT || '',
+                                            receiverName: selectedOrder.shippingAddress?.name,
+                                            receiverAddress: `${selectedOrder.shippingAddress?.street}, ${selectedOrder.shippingAddress?.city}, ${selectedOrder.shippingAddress?.state}, ${selectedOrder.shippingAddress?.zip}, ${selectedOrder.shippingAddress?.country}`,
+                                            receiverPhone: selectedOrder.shippingAddress?.phone,
+                                            weight: selectedOrder.weight || '',
+                                            dimensions: selectedOrder.dimensions || '',
+                                            contents: selectedOrder.orderItems?.map(i => i.product?.name).join(', '),
+                                            pdfSize: 'a5' // Pass A5 size for AWB
+                                        })}
+                                        className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg transition-colors shadow backdrop-blur-sm"
+                                        title="Download AWB Bill"
+                                    >
+                                        <Download size={18} />
+                                        <span className="text-sm">AWB Bill</span>
+                                    </button>
+                                    {/* Send to Delhivery button - only show if not sent yet */}
+                                    {!selectedOrder.sentToDelhivery && (
+                                        <button
+                                            onClick={sendOrderToDelhivery}
+                                            disabled={sendingToDelhivery}
+                                            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors shadow backdrop-blur-sm disabled:opacity-60"
+                                            title="Send Order to Delhivery"
+                                        >
+                                            {sendingToDelhivery ? (
+                                                <span className="animate-spin">⚙️</span>
+                                            ) : (
+                                                <Truck size={18} />
+                                            )}
+                                            <span className="text-sm">Send to Delhivery</span>
+                                        </button>
+                                    )}
+                                    <button onClick={closeModal} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+                                        <X size={24} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Tracking Details Section */}
+                            <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-xl p-5">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                                        <Truck size={20} className="text-white" />
+                                    </div>
+                                    <h3 className="text-lg font-semibold text-orange-900">Tracking Information</h3>
+                                </div>
+                                
+                                {selectedOrder.trackingId ? (
+                                    <div className="bg-white rounded-lg p-4 mb-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div>
+                                                <p className="text-xs text-slate-500 mb-1">Tracking ID</p>
+                                                <p className="font-semibold text-slate-900">{selectedOrder.trackingId}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-slate-500 mb-1">Courier</p>
+                                                <p className="font-semibold text-slate-900">{selectedOrder.courier}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-slate-500 mb-1">Track Order</p>
+                                                {selectedOrder.trackingUrl ? (
+                                                    <a href={selectedOrder.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
+                                                        View Tracking
+                                                    </a>
+                                                ) : (
+                                                    <p className="text-slate-400">No URL</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Delhivery Live Status */}
+                                        {selectedOrder.delhivery && (
+                                            <div className="border-t border-slate-200 mt-4 pt-4">
+                                                <p className="text-xs font-semibold text-slate-600 mb-3 text-center">📦 Live Delhivery Status</p>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                                    {selectedOrder.delhivery.current_status && (
+                                                        <div className="bg-blue-50 p-2 rounded">
+                                                            <p className="text-xs text-slate-600">Current Status</p>
+                                                            <p className="font-semibold text-blue-700">{selectedOrder.delhivery.current_status}</p>
+                                                        </div>
+                                                    )}
+                                                    {selectedOrder.delhivery.current_status_location && (
+                                                        <div className="bg-green-50 p-2 rounded">
+                                                            <p className="text-xs text-slate-600">Last Location</p>
+                                                            <p className="font-semibold text-green-700">{selectedOrder.delhivery.current_status_location}</p>
+                                                        </div>
+                                                    )}
+                                                    {selectedOrder.delhivery.expected_delivery_date && (
+                                                        <div className="bg-purple-50 p-2 rounded col-span-1 md:col-span-2">
+                                                            <p className="text-xs text-slate-600">Expected Delivery</p>
+                                                            <p className="font-semibold text-purple-700">{new Date(selectedOrder.delhivery.expected_delivery_date).toLocaleDateString()}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Recent Events Timeline */}
+                                                {selectedOrder.delhivery.events && selectedOrder.delhivery.events.length > 0 && (
+                                                    <div className="border-t border-slate-200 mt-4 pt-4">
+                                                        <p className="text-xs font-semibold text-slate-600 mb-3">Recent Updates</p>
+                                                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                            {selectedOrder.delhivery.events.slice(0, 5).map((event, idx) => (
+                                                                <div key={idx} className="text-xs border-l-2 border-blue-300 pl-3 py-1">
+                                                                    <div className="font-semibold text-slate-800">{event.status || event.location || 'Update'}</div>
+                                                                    <div className="text-slate-600">{event.location || event.status}</div>
+                                                                    <div className="text-slate-500 text-xs">{new Date(event.time).toLocaleString()}</div>
+                                                                    {event.remarks && <div className="text-slate-500 italic mt-1">{event.remarks}</div>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : null}
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-700 block mb-1">AWB / Tracking ID *</label>
+                                        <input
+                                            type="text"
+                                            value={trackingData.trackingId}
+                                            onChange={e => setTrackingData({...trackingData, trackingId: e.target.value})}
+                                            placeholder="Enter Delhivery AWB or courier tracking ID"
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-700 block mb-1">Courier Name *</label>
+                                        <input
+                                            type="text"
+                                            value={trackingData.courier}
+                                            onChange={e => setTrackingData({...trackingData, courier: e.target.value})}
+                                            placeholder="e.g., FedEx, DHL, UPS"
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-700 block mb-1">Tracking URL</label>
+                                        <input
+                                            type="url"
+                                            value={trackingData.trackingUrl}
+                                            onChange={e => setTrackingData({...trackingData, trackingUrl: e.target.value})}
+                                            placeholder="https://..."
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={updateTrackingDetails}
+                                    className="mt-3 w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2.5 rounded-lg transition-colors"
+                                >
+                                    Update Tracking & Notify Customer
+                                </button>
+
+                                {/* Manual trigger to auto-sync status from courier tracking */}
+                                <button
+                                    onClick={autoSyncStatusFromTracking}
+                                    className="mt-2 w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+                                >
+                                    Auto Status from Tracking
+                                </button>
+
+                                {/* Delhivery Pickup & Auto-Refresh Controls */}
+                                {selectedOrder?.courier?.toLowerCase() === 'delhivery' && (
+                                    <div className="mt-4 space-y-2">
+                                        <button
+                                            onClick={schedulePickupWithDelhivery}
+                                            disabled={schedulingPickup || !selectedOrder?.trackingId}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            {schedulingPickup ? (
+                                                <>
+                                                    <span className="animate-spin">⚙️</span>
+                                                    Scheduling Pickup...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <MapPin size={18} />
+                                                    Schedule Delhivery Pickup
+                                                </>
+                                            )}
+                                        </button>
+                                        
+                                        <button
+                                            onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                            className={`w-full font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                                                autoRefreshEnabled
+                                                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                                                    : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                                            }`}
+                                        >
+                                            <RefreshCw size={18} />
+                                            {autoRefreshEnabled ? `Auto-Refresh ON (Every ${refreshInterval}s)` : 'Auto-Refresh OFF'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Customer Details */}
+                            <div className="bg-slate-50 rounded-xl p-5">
+                                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                                    <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
+                                    Customer Details
+                                    {selectedOrder.isGuest && (
+                                        <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full">
+                                            GUEST ORDER
+                                        </span>
+                                    )}
+                                </h3>
+                                
+                                {!selectedOrder.shippingAddress && !selectedOrder.isGuest && (
+                                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                                        <p className="text-yellow-800 text-sm">
+                                            ⚠️ Shipping address not available for this order. This order was placed before address tracking was implemented.
+                                        </p>
+                                        {selectedOrder.userId && (
+                                            <p className="text-yellow-700 text-xs mt-2">
+                                                Customer: {selectedOrder.userId.name || selectedOrder.userId.email || 'Unknown'}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <p className="text-slate-500">Name</p>
+                                        <p className="font-medium text-slate-900">
+                                            {selectedOrder.isGuest 
+                                                ? (selectedOrder.guestName || '—') 
+                                                : (selectedOrder.shippingAddress?.name || selectedOrder.userId?.name || '—')}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Email</p>
+                                        <p className="font-medium text-slate-900">
+                                            {selectedOrder.isGuest 
+                                                ? (selectedOrder.guestEmail || '—') 
+                                                : (selectedOrder.shippingAddress?.email || selectedOrder.userId?.email || '—')}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Phone</p>
+                                        <p className="font-medium text-slate-900">
+                                            {selectedOrder.isGuest 
+                                                ? (selectedOrder.guestPhone || '—') 
+                                                : (selectedOrder.shippingAddress?.phone || '—')}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Street</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.shippingAddress?.street || '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">City</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.shippingAddress?.city || '—'}</p>
+                                    </div>
+                                    {selectedOrder.shippingAddress?.district && selectedOrder.shippingAddress.district.trim() !== '' && (
+                                        <div>
+                                            <p className="text-slate-500">District</p>
+                                            <p className="font-medium text-slate-900">{selectedOrder.shippingAddress.district}</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-slate-500">State</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.shippingAddress?.state || '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Pincode</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.shippingAddress?.zip || selectedOrder.shippingAddress?.pincode || '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Country</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.shippingAddress?.country || '—'}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Products */}
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                                    <div className="w-1 h-5 bg-green-600 rounded-full"></div>
+                                    Order Items
+                                </h3>
+                                <div className="space-y-3">
+                                    {selectedOrder.orderItems.map((item, i) => (
+                                        <div key={i} className="flex items-center gap-4 border border-slate-200 rounded-xl p-3 bg-white hover:shadow-md transition-shadow">
+                                            <img
+                                                src={item.productId?.images?.[0] || item.product?.images?.[0] || '/placeholder.png'}
+                                                alt={item.productId?.name || item.product?.name || 'Product'}
+                                                className="w-20 h-20 object-cover rounded-lg border border-slate-100"
+                                            />
+                                            <div className="flex-1">
+                                                <p className="font-medium text-slate-900">{item.productId?.name || item.product?.name || 'Unknown Product'}</p>
+                                                <p className="text-sm text-slate-600">Quantity: {item.quantity}</p>
+                                                <p className="text-sm font-semibold text-slate-900">{currency}{item.price} each</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-lg font-bold text-slate-900">{currency}{item.price * item.quantity}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Payment & Status */}
+                            <div className="bg-slate-50 rounded-xl p-5">
+                                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                                    <div className="w-1 h-5 bg-purple-600 rounded-full"></div>
+                                    Payment & Status
+                                </h3>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                                    <div>
+                                        <p className="text-slate-500">Total Amount</p>
+                                        <p className="text-xl font-bold text-slate-900">{currency}{selectedOrder.total}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Payment Method</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.paymentMethod}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Payment Status</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.isPaid ? "✓ Paid" : "Pending"}</p>
+                                    </div>
+                                    {selectedOrder.isCouponUsed && (
+                                        <div>
+                                            <p className="text-slate-500">Coupon Used</p>
+                                            <p className="font-medium text-green-600">{selectedOrder.coupon.code} ({selectedOrder.coupon.discount}% off)</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-slate-500">Order Status</p>
+                                        <p className="font-medium text-slate-900">{selectedOrder.status}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Order Date</p>
+                                        <p className="font-medium text-slate-900">{new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={async () => {
+                                        if (!window.confirm('Are you sure you want to delete this order? This action cannot be undone.')) return;
+                                        try {
+                                            const token = await getToken();
+                                            await axios.delete(`/api/store/orders/${selectedOrder._id}`, {
+                                                headers: { Authorization: `Bearer ${token}` }
+                                            });
+                                            toast.success('Order deleted successfully');
+                                            setIsModalOpen(false);
+                                            fetchOrders();
+                                        } catch (error) {
+                                            toast.error(error?.response?.data?.error || 'Failed to delete order');
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors shadow backdrop-blur-sm"
+                                    title="Delete Order"
+                                >
+                                    <X size={18} />
+                                    <span className="text-sm">Delete</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
