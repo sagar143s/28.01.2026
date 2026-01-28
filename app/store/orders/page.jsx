@@ -55,6 +55,9 @@ export default function StoreOrders() {
     const [schedulingPickup, setSchedulingPickup] = useState(false);
     const [sendingToDelhivery, setSendingToDelhivery] = useState(false);
     const [refreshInterval, setRefreshInterval] = useState(30); // seconds
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
+    const [rejectingReturnIndex, setRejectingReturnIndex] = useState(null);
     const refreshIntervalRef = useRef(null);
 
     const { user, getToken, loading: authLoading } = useAuth();
@@ -145,6 +148,7 @@ export default function StoreOrders() {
             CANCELLED: orders.filter(o => o.status === 'CANCELLED').length,
             PAYMENT_FAILED: orders.filter(o => o.status === 'PAYMENT_FAILED').length,
             RETURNED: orders.filter(o => o.status === 'RETURNED').length,
+            RETURN_REQUESTED: orders.filter(o => o.returns && o.returns.some(r => r.status === 'REQUESTED')).length,
             PENDING_PAYMENT: orders.filter(o => !o.isPaid).length,
             PENDING_SHIPMENT: orders.filter(o => !o.trackingId && ['ORDER_PLACED', 'PROCESSING'].includes(o.status)).length,
         };
@@ -155,6 +159,7 @@ export default function StoreOrders() {
         if (filterStatus === 'ALL') return orders;
         if (filterStatus === 'PENDING_PAYMENT') return orders.filter(o => !o.isPaid);
         if (filterStatus === 'PENDING_SHIPMENT') return orders.filter(o => !o.trackingId && ['ORDER_PLACED', 'PROCESSING'].includes(o.status));
+        if (filterStatus === 'RETURN_REQUESTED') return orders.filter(o => o.returns && o.returns.some(r => r.status === 'REQUESTED'));
         return orders.filter(o => o.status === filterStatus);
     };
 
@@ -551,17 +556,24 @@ export default function StoreOrders() {
 
             {/* Status Filter Tabs */}
             <div className="mb-6 flex flex-wrap gap-2">
-                {['ALL', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'PAYMENT_FAILED', 'RETURNED'].map(status => (
+                {['ALL', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'PAYMENT_FAILED', 'RETURNED', 'RETURN_REQUESTED'].map(status => (
                     <button
                         key={status}
                         onClick={() => setFilterStatus(status)}
-                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
                             filterStatus === status
                                 ? 'bg-blue-600 text-white shadow-md'
                                 : 'bg-gray-100 text-slate-700 hover:bg-gray-200'
                         }`}
                     >
-                        {status === 'ALL' ? 'All Orders' : status === 'PAYMENT_FAILED' ? 'Payment Failed' : status.replace(/_/g, ' ')}
+                        <span>{status === 'ALL' ? 'All Orders' : status === 'PAYMENT_FAILED' ? 'Payment Failed' : status === 'RETURN_REQUESTED' ? 'Return Requested' : status.replace(/_/g, ' ')}</span>
+                        {status === 'RETURN_REQUESTED' && stats.RETURN_REQUESTED > 0 && (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                filterStatus === status ? 'bg-blue-800' : 'bg-red-500 text-white'
+                            }`}>
+                                {stats.RETURN_REQUESTED}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -689,7 +701,13 @@ export default function StoreOrders() {
                                             senderPhone: process.env.NEXT_PUBLIC_INVOICE_CONTACT || '',
                                             receiverName: selectedOrder.shippingAddress?.name,
                                             receiverAddress: `${selectedOrder.shippingAddress?.street}, ${selectedOrder.shippingAddress?.city}, ${selectedOrder.shippingAddress?.state}, ${selectedOrder.shippingAddress?.zip}, ${selectedOrder.shippingAddress?.country}`,
-                                            receiverPhone: selectedOrder.shippingAddress?.phone,
+                                            receiverPhone: (() => {
+                                                const primary = [selectedOrder.shippingAddress?.phoneCode, selectedOrder.shippingAddress?.phone].filter(Boolean).join(' ');
+                                                const alt = selectedOrder.shippingAddress?.alternatePhone
+                                                    ? [selectedOrder.shippingAddress?.alternatePhoneCode || selectedOrder.shippingAddress?.phoneCode, selectedOrder.shippingAddress.alternatePhone].filter(Boolean).join(' ')
+                                                    : '';
+                                                return alt ? `${primary} / ${alt}` : primary;
+                                            })(),
                                             weight: selectedOrder.weight || '',
                                             dimensions: selectedOrder.dimensions || '',
                                             contents: selectedOrder.orderItems?.map(i => i.product?.name).join(', '),
@@ -908,6 +926,108 @@ export default function StoreOrders() {
                                 )}
                             </div>
 
+                            {/* Return/Replacement Request Section */}
+                            {selectedOrder.returns && selectedOrder.returns.length > 0 && (
+                                <div className="bg-gradient-to-br from-pink-50 to-pink-100 border border-pink-200 rounded-xl p-5">
+                                    <h3 className="text-lg font-semibold text-pink-900 mb-4">Return/Replacement Requests</h3>
+                                    
+                                    <div className="space-y-4">
+                                        {selectedOrder.returns.map((returnRequest, idx) => (
+                                            <div key={idx} className="bg-white rounded-lg p-4 border border-pink-200">
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                                        returnRequest.type === 'RETURN' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                                                    }`}>
+                                                        {returnRequest.type}
+                                                    </span>
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                                        returnRequest.status === 'REQUESTED' ? 'bg-yellow-100 text-yellow-700' :
+                                                        returnRequest.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                                                        returnRequest.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                                                        'bg-slate-100 text-slate-700'
+                                                    }`}>
+                                                        {returnRequest.status}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500 ml-auto">{new Date(returnRequest.requestedAt).toLocaleString()}</span>
+                                                </div>
+
+                                                <div className="space-y-2 text-sm">
+                                                    <div>
+                                                        <p className="text-slate-600 font-medium">Reason:</p>
+                                                        <p className="text-slate-900">{returnRequest.reason}</p>
+                                                    </div>
+                                                    
+                                                    {returnRequest.description && (
+                                                        <div>
+                                                            <p className="text-slate-600 font-medium">Description:</p>
+                                                            <p className="text-slate-900">{returnRequest.description}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {returnRequest.images && returnRequest.images.length > 0 && (
+                                                        <div>
+                                                            <p className="text-slate-600 font-medium mb-2">Images:</p>
+                                                            <div className="flex gap-2 flex-wrap">
+                                                                {returnRequest.images.map((img, imgIdx) => (
+                                                                    <a 
+                                                                        key={imgIdx} 
+                                                                        href={img} 
+                                                                        target="_blank" 
+                                                                        rel="noopener noreferrer"
+                                                                    >
+                                                                        <img 
+                                                                            src={img} 
+                                                                            alt={`Return ${imgIdx + 1}`}
+                                                                            className="w-24 h-24 object-cover rounded-lg border-2 border-pink-200 hover:border-pink-400 transition cursor-pointer"
+                                                                        />
+                                                                    </a>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {returnRequest.status === 'REQUESTED' && (
+                                                        <div className="flex gap-2 pt-3">
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        const token = await getToken(true);
+                                                                        await axios.post('/api/store/return-requests', {
+                                                                            orderId: selectedOrder._id,
+                                                                            returnIndex: idx,
+                                                                            action: 'APPROVE'
+                                                                        }, {
+                                                                            headers: { Authorization: `Bearer ${token}` }
+                                                                        });
+                                                                        toast.success('Approved!');
+                                                                        fetchOrders();
+                                                                        closeModal();
+                                                                    } catch (error) {
+                                                                        toast.error(error?.response?.data?.error || 'Failed');
+                                                                    }
+                                                                }}
+                                                                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                                                            >
+                                                                ✓ Approve
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setRejectingReturnIndex(idx);
+                                                                    setShowRejectModal(true);
+                                                                }}
+                                                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                                                            >
+                                                                ✗ Reject
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Customer Details */}
                             <div className="bg-slate-50 rounded-xl p-5">
                                 <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
@@ -954,10 +1074,20 @@ export default function StoreOrders() {
                                         <p className="text-slate-500">Phone</p>
                                         <p className="font-medium text-slate-900">
                                             {selectedOrder.isGuest 
-                                                ? (selectedOrder.guestPhone || '—') 
-                                                : (selectedOrder.shippingAddress?.phone || '—')}
+                                                ? ([selectedOrder.shippingAddress?.phoneCode, selectedOrder.guestPhone].filter(Boolean).join(' ') || '—')
+                                                : ([selectedOrder.shippingAddress?.phoneCode, selectedOrder.shippingAddress?.phone].filter(Boolean).join(' ') || '—')}
                                         </p>
                                     </div>
+                                    {(selectedOrder.shippingAddress?.alternatePhone || selectedOrder.alternatePhone) && (
+                                        <div>
+                                            <p className="text-slate-500">Alternate Phone</p>
+                                            <p className="font-medium text-slate-900">
+                                                {selectedOrder.isGuest
+                                                    ? [selectedOrder.alternatePhoneCode || selectedOrder.shippingAddress?.phoneCode || '+91', selectedOrder.alternatePhone || selectedOrder.shippingAddress?.alternatePhone].filter(Boolean).join(' ')
+                                                    : [selectedOrder.shippingAddress?.alternatePhoneCode || selectedOrder.shippingAddress?.phoneCode || '+91', selectedOrder.shippingAddress?.alternatePhone || selectedOrder.alternatePhone].filter(Boolean).join(' ')}
+                                            </p>
+                                        </div>
+                                    )}
                                     <div>
                                         <p className="text-slate-500">Street</p>
                                         <p className="font-medium text-slate-900">{selectedOrder.shippingAddress?.street || '—'}</p>
@@ -1110,6 +1240,89 @@ export default function StoreOrders() {
                                     <span className="text-sm">Delete</span>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rejection Reason Modal */}
+            {showRejectModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectReason('');
+                    setRejectingReturnIndex(null);
+                }}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 transform transition-all" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="15" y1="9" x2="9" y2="15"/>
+                                    <line x1="9" y1="9" x2="15" y2="15"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-slate-900">Reject Request</h3>
+                                <p className="text-sm text-slate-500">Provide a clear reason for the customer</p>
+                            </div>
+                        </div>
+                        
+                        <div className="mb-6">
+                            <label className="block text-sm font-semibold text-slate-700 mb-3">
+                                Rejection Reason <span className="text-red-600">*</span>
+                            </label>
+                            <textarea
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                placeholder="Example: Product shows no defects upon inspection. Please contact support if you believe this is an error."
+                                rows="5"
+                                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
+                            />
+                            <p className="text-xs text-slate-500 mt-2">This message will be visible to the customer in their order dashboard</p>
+                        </div>
+                        
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowRejectModal(false);
+                                    setRejectReason('');
+                                    setRejectingReturnIndex(null);
+                                }}
+                                className="flex-1 px-6 py-3 bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-300 transition font-semibold"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (!rejectReason.trim()) {
+                                        toast.error('Please provide a rejection reason');
+                                        return;
+                                    }
+                                    try {
+                                        const token = await getToken(true);
+                                        await axios.post('/api/store/return-requests', {
+                                            orderId: selectedOrder._id,
+                                            returnIndex: rejectingReturnIndex,
+                                            action: 'REJECT',
+                                            rejectionReason: rejectReason.trim()
+                                        }, {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        });
+                                        toast.success('Return request rejected successfully');
+                                        setShowRejectModal(false);
+                                        setRejectReason('');
+                                        setRejectingReturnIndex(null);
+                                        fetchOrders();
+                                        closeModal();
+                                    } catch (error) {
+                                        toast.error(error?.response?.data?.error || 'Failed to reject request');
+                                    }
+                                }}
+                                disabled={!rejectReason.trim()}
+                                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-600/30"
+                            >
+                                Confirm Rejection
+                            </button>
                         </div>
                     </div>
                 </div>

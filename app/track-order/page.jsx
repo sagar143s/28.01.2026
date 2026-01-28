@@ -366,7 +366,12 @@ function TrackOrderPageInner() {
                     <p>{order.shippingAddress.street}</p>
                     <p>{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}</p>
                     <p>{order.shippingAddress.country}</p>
-                    {order.shippingAddress.phone && <p className="mt-2">Phone: {order.shippingAddress.phone}</p>}
+                    {order.shippingAddress.phone && (
+                      <p className="mt-2">Phone: {(order.shippingAddress.phoneCode || '+91')} {order.shippingAddress.phone}</p>
+                    )}
+                    {order.shippingAddress.alternatePhone && (
+                      <p className="text-slate-600">Alternate: {(order.shippingAddress.alternatePhoneCode || order.shippingAddress.phoneCode || '+91')} {order.shippingAddress.alternatePhone}</p>
+                    )}
                   </div>
                 </div>
               )}

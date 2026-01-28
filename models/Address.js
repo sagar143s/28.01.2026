@@ -12,6 +12,8 @@ const AddressSchema = new mongoose.Schema({
   country: String,
   phone: String,
   phoneCode: String,
+  alternatePhone: String,
+  alternatePhoneCode: String,
 }, { timestamps: true });
 
 export default mongoose.models.Address || mongoose.model("Address", AddressSchema);

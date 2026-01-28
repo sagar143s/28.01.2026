@@ -173,7 +173,7 @@ export default function ShippingPolicyPage() {
               <strong>Email:</strong> support@quickfynd.com
             </p>
             <p className="text-gray-700">
-              <strong>Customer Support:</strong> +91 95263 67551
+              <strong>Customer Support:</strong> +91 7592875212
             </p>
           </section>
 

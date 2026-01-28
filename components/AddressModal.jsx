@@ -32,6 +32,8 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
         country: 'India',
         phone: '',
         phoneCode: '+91',
+        alternatePhone: '',
+        alternatePhoneCode: '+91',
         id: null,
     })
 
@@ -58,6 +60,8 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
                 country: initialAddress.country || 'India',
                 phone: phoneNumber,
                 phoneCode: initialAddress.phoneCode || '+91',
+                alternatePhone: initialAddress.alternatePhone || '',
+                alternatePhoneCode: initialAddress.alternatePhoneCode || initialAddress.phoneCode || '+91',
             })
         }
     }, [isEdit, initialAddress])
@@ -80,7 +84,8 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
             setAddress({
                 ...address,
                 country: value,
-                phoneCode: selectedCountry?.code || '+971'
+                phoneCode: selectedCountry?.code || '+971',
+                alternatePhoneCode: selectedCountry?.code || '+971'
             })
         } else {
             setAddress({
@@ -100,9 +105,15 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
 
             // Clean and validate phone number
             const cleanedPhone = address.phone.replace(/[^0-9]/g, '');
+            const cleanedAlternate = (address.alternatePhone || '').replace(/[^0-9]/g, '');
             
             if (!cleanedPhone || cleanedPhone.length < 7 || cleanedPhone.length > 15) {
                 toast.error('Phone number must be between 7 and 15 digits');
+                return;
+            }
+
+            if (cleanedAlternate && (cleanedAlternate.length < 7 || cleanedAlternate.length > 15)) {
+                toast.error('Alternate number must be between 7 and 15 digits');
                 return;
             }
             
@@ -110,6 +121,8 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
             
             // Prepare address data with userId from authenticated user
             const addressData = { ...address, userId: user.uid, phone: cleanedPhone };
+            addressData.alternatePhone = cleanedAlternate || '';
+            addressData.alternatePhoneCode = cleanedAlternate ? address.alternatePhoneCode || address.phoneCode : '';
             
             if (!addressData.zip || addressData.zip.trim() === '') {
                 delete addressData.zip
@@ -117,6 +130,10 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
             // Remove district if not present or empty (to match Prisma schema)
             if (!addressData.district) {
                 delete addressData.district;
+            }
+            if (!addressData.alternatePhone) {
+                delete addressData.alternatePhone;
+                delete addressData.alternatePhoneCode;
             }
             
             console.log('AddressModal - Sending address:', addressData);
@@ -150,6 +167,8 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
                 country: 'India',
                 phone: '',
                 phoneCode: '+91',
+                alternatePhone: '',
+                alternatePhoneCode: '+91',
                 id: null,
             })
         } catch (error) {
@@ -321,6 +340,40 @@ const AddressModal = ({ open, setShowAddressModal, onAddressAdded, initialAddres
                             />
                         </div>
                         <p className="text-xs text-gray-500 mt-1">Enter phone number without country code</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Alternate Phone (Optional)</label>
+                        <div className="flex gap-2">
+                            <select
+                                name="alternatePhoneCode"
+                                onChange={handleAddressChange}
+                                value={address.alternatePhoneCode}
+                                className="px-3 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-medium min-w-[80px]"
+                            >
+                                {countries.map((country) => (
+                                    <option key={country.code} value={country.code}>{country.code}</option>
+                                ))}
+                            </select>
+                            <input
+                                name="alternatePhone"
+                                onChange={(e) => {
+                                    const value = e.target.value.replace(/[^0-9]/g, '');
+                                    e.target.value = value;
+                                    setAddress({
+                                        ...address,
+                                        alternatePhone: value
+                                    });
+                                }}
+                                value={address.alternatePhone}
+                                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Alternate contact number"
+                                autoComplete="off"
+                            />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Optional number we can reach if primary is unavailable.</p>
                     </div>
 
                     <div className="flex gap-3 mt-6">

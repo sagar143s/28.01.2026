@@ -56,6 +56,8 @@ export async function POST(req) {
       country: addr.country,
       phone: addr.phone,
       phoneCode: addr.phoneCode || '+971',
+      alternatePhone: addr.alternatePhone || '',
+      alternatePhoneCode: addr.alternatePhoneCode || addr.phoneCode || '+971',
     }
 
     // Basic validation
@@ -106,6 +108,8 @@ export async function PUT(req) {
       country: addr.country ?? existing.country,
       phone: addr.phone ?? existing.phone,
       phoneCode: addr.phoneCode ?? existing.phoneCode,
+      alternatePhone: addr.alternatePhone ?? existing.alternatePhone,
+      alternatePhoneCode: addr.alternatePhoneCode ?? existing.alternatePhoneCode,
     }
 
     const updated = await Address.findByIdAndUpdate(id, data, { new: true })

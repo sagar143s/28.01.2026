@@ -46,6 +46,8 @@ export default function CheckoutPage() {
     name: '',
     email: '',
     phone: '',
+    alternatePhone: '',
+    alternatePhoneCode: '+91',
   });
 
   // For India state/district dropdowns
@@ -63,6 +65,7 @@ export default function CheckoutPage() {
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [showPincodeModal, setShowPincodeModal] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState(null);
+  const [showAlternatePhone, setShowAlternatePhone] = useState(false);
 
   // Coupon logic
   const [coupon, setCoupon] = useState("");
@@ -225,7 +228,7 @@ export default function CheckoutPage() {
       setDistricts(stateObj ? stateObj.districts : []);
       setForm(f => ({ ...f, state: value, district: '' }));
     } else if (name === 'country') {
-      setForm(f => ({ ...f, country: value, state: '', district: '' }));
+      setForm(f => ({ ...f, country: value, state: '', district: '', alternatePhoneCode: f.alternatePhoneCode || f.phoneCode }));
       if (value !== 'India') setDistricts([]);
     } else if (name === 'payment') {
       // If trying to select COD and not logged in, show sign-in instead
@@ -362,6 +365,11 @@ export default function CheckoutPage() {
       setFormError("Your cart is empty.");
       return;
     }
+
+    if (form.alternatePhone && !/^[0-9]{7,15}$/.test(form.alternatePhone)) {
+      setFormError("Alternate number must be 7-15 digits.");
+      return;
+    }
     
     // For card payment, trigger Razorpay (allows guest checkout)
     if (form.payment === 'card') {
@@ -404,6 +412,9 @@ export default function CheckoutPage() {
             name: form.name,
             email: form.email,
             phone: form.phone,
+            phoneCode: form.phoneCode,
+            alternatePhone: form.alternatePhone || '',
+            alternatePhoneCode: form.alternatePhone ? form.alternatePhoneCode || form.phoneCode : '',
             street: form.street,
             city: form.city,
             state: form.state,
@@ -473,6 +484,9 @@ export default function CheckoutPage() {
             name: form.name || user.displayName || '',
             email: form.email || user.email || '',
             phone: form.phone || '',
+            phoneCode: form.phoneCode,
+            alternatePhone: form.alternatePhone || '',
+            alternatePhoneCode: form.alternatePhone ? form.alternatePhoneCode || form.phoneCode : '',
             street: form.street,
             city: form.city,
             state: form.state,
@@ -718,7 +732,8 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="py-10 bg-white">
+    <>
+      <div className="py-10 bg-white md:pb-0 pb-32">
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Left column: address, form, payment */}
         <div className="md:col-span-2">
@@ -840,6 +855,9 @@ export default function CheckoutPage() {
                             <div className="text-gray-700 text-sm">{address.city}, {address.district || ''} {address.state}</div>
                             <div className="text-gray-700 text-sm">{address.country} {address.zip ? `- ${address.zip}` : ''}</div>
                             <div className="text-orange-600 text-sm font-semibold mt-1">{address.phoneCode || '+91'} {address.phone}</div>
+                            {address.alternatePhone && (
+                              <div className="text-gray-600 text-xs font-semibold">Alternate: {(address.alternatePhoneCode || address.phoneCode || '+91')} {address.alternatePhone}</div>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-col gap-2 ml-4">
@@ -878,11 +896,6 @@ export default function CheckoutPage() {
                   >
                     <span className="text-xl">+</span> Add New Address
                   </button>
-                  <div className="flex flex-col gap-1 mt-2 text-sm text-gray-700 bg-gray-50 p-3 rounded">
-                    <span>Subtotal: <span className="font-bold">₹ {subtotal.toLocaleString()}</span></span>
-                    <span>Delivery charge: <span className="font-bold">₹ {shipping.toLocaleString()}</span></span>
-                    <span className="text-lg font-bold text-gray-900 mt-1">Total: ₹ {total.toLocaleString()}</span>
-                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 mb-4">
@@ -926,12 +939,58 @@ export default function CheckoutPage() {
                   {form.phone && !/^[0-9]{7,15}$/.test(form.phone) && (
                     <div className="text-red-500 text-sm">Phone number must be 7-15 digits</div>
                   )}
+                  {/* Alternate phone checkbox */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showAlternatePhone}
+                      onChange={(e) => {
+                        setShowAlternatePhone(e.target.checked);
+                        if (!e.target.checked) {
+                          setForm(f => ({ ...f, alternatePhone: '', alternatePhoneCode: f.phoneCode }));
+                        }
+                      }}
+                      className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm text-gray-700">Add alternate phone number (optional)</span>
+                  </label>
+                  {/* Alternate phone input - only show when checkbox is ticked */}
+                  {showAlternatePhone && (
+                    <>
+                      <div className="flex gap-2">
+                        <select
+                          className="border border-gray-200 bg-white rounded px-2 py-2 focus:border-gray-400"
+                          name="alternatePhoneCode"
+                          value={form.alternatePhoneCode}
+                          onChange={handleChange}
+                          style={{ maxWidth: '110px' }}
+                        >
+                          {countryCodes.map((c) => (
+                            <option key={c.code} value={c.code}>{c.code}</option>
+                          ))}
+                        </select>
+                        <input
+                          className="border border-gray-200 bg-white rounded px-4 py-2 flex-1 focus:border-gray-400"
+                          type="tel"
+                          name="alternatePhone"
+                          placeholder="Alternate phone (optional)"
+                          value={form.alternatePhone || ''}
+                          onChange={handleChange}
+                          pattern="[0-9]{7,15}"
+                          title="Alternate number must be 7-15 digits"
+                        />
+                      </div>
+                      {form.alternatePhone && !/^[0-9]{7,15}$/.test(form.alternatePhone) && (
+                        <div className="text-red-500 text-sm">Alternate number must be 7-15 digits</div>
+                      )}
+                    </>
+                  )}
                   {/* Email (optional) */}
                   <input
                     className="border border-gray-200 bg-white rounded px-4 py-2 focus:border-gray-400"
                     type="email"
                     name="email"
-                    placeholder="Email address (optional)"
+                    placeholder="Email address "
                     value={form.email || ''}
                     onChange={handleChange}
                   />
@@ -1136,6 +1195,8 @@ export default function CheckoutPage() {
             </button>
           </form>
           {couponError && <div className="text-red-500 text-xs mb-2">{couponError}</div>}
+          
+          {/* Order Details */}
           <h2 className="font-bold text-lg mb-2 text-gray-900">Order details</h2>
           <div className="flex justify-between text-sm text-gray-900 mb-2">
             <span>Items</span>
@@ -1146,14 +1207,18 @@ export default function CheckoutPage() {
             <span>{shipping > 0 ? `₹ ${shipping.toLocaleString()}` : '₹ 0'}</span>
           </div>
           <hr className="my-2" />
-          <div className="flex justify-between font-bold text-base text-gray-900 mb-4">
+          
+          {/* Total - Desktop Only */}
+          <div className="hidden md:flex justify-between font-bold text-base text-gray-900 mb-4">
             <span>Total</span>
             <span>₹ {total.toLocaleString()}</span>
           </div>
+          
+          {/* Place Order Button - Desktop Only */}
           <button
             type="submit"
             form="checkout-form"
-            className={`relative w-full text-white font-bold py-3 rounded text-lg transition shadow-md hover:shadow-lg ${placingOrder ? 'bg-red-600 animate-pulse cursor-not-allowed opacity-95' : 'bg-red-600 hover:bg-red-700'}`}
+            className={`hidden md:block relative w-full text-white font-bold py-3 rounded text-lg transition shadow-md hover:shadow-lg ${placingOrder ? 'bg-red-600 cursor-not-allowed opacity-95 animate-bounce' : 'bg-red-600 hover:bg-red-700'}`}
             disabled={placingOrder}
             aria-busy={placingOrder}
           >
@@ -1176,6 +1241,63 @@ export default function CheckoutPage() {
           </button>
         </div>
       </div>
+
+      {/* Sticky Footer - Only Total and Place Order on Mobile */}
+      <div className="fixed bottom-0 left-0 right-0 md:hidden bg-white border-t border-gray-200 shadow-lg z-40 p-4">
+        <div className="max-w-6xl mx-auto">
+          {/* Total - Sticky on Mobile */}
+          <div className="flex justify-between font-bold text-base text-gray-900 mb-4">
+            <span>Total</span>
+            <span>₹ {total.toLocaleString()}</span>
+          </div>
+          
+          {/* Address validation message */}
+          {!form.addressId && !(form.name && form.phone && form.pincode && form.city && form.state && form.street) && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm p-3 rounded mb-3">
+              Please fill the address to continue
+            </div>
+          )}
+          
+          <button
+            type="submit"
+            form="checkout-form"
+            className={`relative w-full text-white font-bold py-3 rounded text-lg transition shadow-md hover:shadow-lg ${
+              (!form.addressId && !(form.name && form.phone && form.pincode && form.city && form.state && form.street)) || placingOrder 
+                ? 'bg-gray-400 cursor-not-allowed opacity-75' 
+                : form.payment === 'cod' 
+                  ? 'bg-green-600 hover:bg-green-700' 
+                  : form.payment === 'card'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-red-600 hover:bg-red-700'
+            } ${placingOrder ? 'animate-bounce' : ''}`}
+            disabled={(!form.addressId && !(form.name && form.phone && form.pincode && form.city && form.state && form.street)) || placingOrder}
+            aria-busy={placingOrder}
+          >
+            {placingOrder ? (
+              <span className="inline-flex items-center gap-2">
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+                Placing order...
+              </span>
+            ) : form.payment === 'card' ? (
+              'Pay by Card'
+            ) : form.payment === 'cod' ? (
+              'Pay by COD'
+            ) : (
+              'Place order'
+            )}
+            {placingOrder && (
+              <span className="absolute left-0 top-0 h-full w-full overflow-hidden rounded opacity-20">
+                <span className="block h-full w-1/3 bg-white animate-[shimmer_1.2s_ease_infinite]" />
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+      </div>
+
       <AddressModal 
         open={showAddressModal} 
         setShowAddressModal={(show) => {
@@ -1221,6 +1343,6 @@ export default function CheckoutPage() {
         onLoad={() => setRazorpayLoaded(true)}
         onError={() => setFormError("Failed to load payment system")}
       />
-    </div>
+    </>
   );
 }

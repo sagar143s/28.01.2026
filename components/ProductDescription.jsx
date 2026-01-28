@@ -8,6 +8,26 @@ import axios from "axios"
 import ProductCard from "./ProductCard"
 import { useSelector } from "react-redux"
 
+// Helper function to get relative time
+const getRelativeTime = (dateString) => {
+    const now = new Date()
+    const date = new Date(dateString)
+    const diffInMs = now - date
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
+    
+    if (diffInDays === 0) return 'Today'
+    if (diffInDays === 1) return 'Yesterday'
+    if (diffInDays < 7) return `${diffInDays} days ago`
+    if (diffInDays < 14) return 'Last week'
+    if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`
+    if (diffInDays < 60) return 'Last month'
+    
+    // For older dates, show month and year
+    const month = date.toLocaleDateString('en-US', { month: 'short' })
+    const year = date.getFullYear()
+    return `${month} ${year}`
+}
+
 // Updated design - Noon.com style v2
 const ProductDescription = ({ product, reviews = [], loadingReviews = false, onReviewAdded }) => {
 
@@ -15,6 +35,7 @@ const ProductDescription = ({ product, reviews = [], loadingReviews = false, onR
     const [suggestedProducts, setSuggestedProducts] = useState([])
     const allProducts = useSelector((state) => state.product.list || [])
     const [lightboxImage, setLightboxImage] = useState(null)
+    const [visibleReviews, setVisibleReviews] = useState(5)
 
     // Calculate rating distribution
     const ratingCounts = [0, 0, 0, 0, 0]
@@ -103,7 +124,7 @@ const ProductDescription = ({ product, reviews = [], loadingReviews = false, onR
             </div>
 
             {/* Reviews Section */}
-            <div className="bg-white border border-gray-200">
+            <div id="reviews" className="bg-white border border-gray-200">
                 <div className="border-b border-gray-200 px-6 py-4">
                     <h2 className="text-xl font-bold text-gray-900">Reviews</h2>
                 </div>
@@ -161,6 +182,26 @@ const ProductDescription = ({ product, reviews = [], loadingReviews = false, onR
                         <ReviewForm productId={product._id} onReviewAdded={onReviewAdded} />
                     </div>
 
+                    {/* Customer Photos Section */}
+                    {reviews.some(r => r.images && r.images.length > 0) && (
+                        <div className="mb-8 pb-8 border-b border-gray-200">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4">Customer Photos ({reviews.reduce((acc, r) => acc + (r.images?.length || 0), 0)})</h3>
+                            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                                {reviews.flatMap(review => review.images || []).map((img, idx) => (
+                                    <div key={idx} className="relative aspect-square group">
+                                        <Image
+                                            src={img}
+                                            alt={`Customer photo ${idx + 1}`}
+                                            fill
+                                            className="rounded-lg object-cover border border-gray-200 hover:border-orange-400 transition-all cursor-pointer hover:scale-105"
+                                            onClick={() => setLightboxImage(img)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Reviews List */}
                     {loadingReviews ? (
                         <div className="flex justify-center py-8">
@@ -172,12 +213,12 @@ const ProductDescription = ({ product, reviews = [], loadingReviews = false, onR
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {reviews.map((item, idx) => (
+                            {reviews.slice(0, visibleReviews).map((item, idx) => (
                                 <div key={item.id || item._id || idx} className="pb-6 border-b border-gray-100 last:border-0">
                                     <div className="flex gap-4">
                                         {/* User Avatar */}
                                         <div className="flex-shrink-0">
-                                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 via-red-400 to-pink-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-bold text-lg">
                                                 {(item.user?.name || item.userId?.name || item.customerName) ? (item.user?.name || item.userId?.name || item.customerName)[0].toUpperCase() : 'U'}
                                             </div>
                                         </div>
@@ -188,13 +229,9 @@ const ProductDescription = ({ product, reviews = [], loadingReviews = false, onR
                                             <div className="flex items-start justify-between mb-2">
                                             <div>
                                                     <p className="font-semibold text-gray-900">{item.user?.name || item.userId?.name || item.customerName || 'Guest User'}</p>
-                                                    {/* <p className="text-xs text-gray-400 mt-0.5">
-                                                        {new Date(item.createdAt).toLocaleDateString('en-US', {
-                                                            day: 'numeric',
-                                                            month: 'long',
-                                                            year: 'numeric'
-                                                        })}
-                                                    </p> */}
+                                                    <p className="text-xs text-gray-500 mt-0.5">
+                                                        {getRelativeTime(item.createdAt)}
+                                                    </p>
                                                 </div> 
                                                 <div className="flex items-center gap-0.5">
                                                     {Array(5).fill('').map((_, index) => (
@@ -237,6 +274,18 @@ const ProductDescription = ({ product, reviews = [], loadingReviews = false, onR
                                     </div>
                                 </div>
                             ))}
+                            
+                            {/* Load More Button */}
+                            {reviews.length > visibleReviews && (
+                                <div className="text-center pt-6">
+                                    <button
+                                        onClick={() => setVisibleReviews(prev => prev + 5)}
+                                        className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors"
+                                    >
+                                        Load More Reviews ({reviews.length - visibleReviews} more)
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

@@ -19,6 +19,7 @@ const StoreSidebar = ({storeInfo}) => {
         { name: 'Coupons', href: '/store/coupons', icon: TicketIcon },
         { name: 'Shipping', href: '/store/shipping', icon: TruckIcon },
         { name: 'Customers', href: '/store/customers', icon: UsersIcon },
+        { name: 'Manage Users', href: '/store/settings/users', icon: UserIcon },
         { name: 'Orders', href: '/store/orders', icon: LayoutListIcon },
         { name: 'Return Requests', href: '/store/return-requests', icon: RefreshCw },
         { name: 'Reviews', href: '/store/reviews', icon: StarIcon },

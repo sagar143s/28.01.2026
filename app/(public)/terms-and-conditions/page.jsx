@@ -180,7 +180,7 @@ export default function TermsAndConditions() {
         Email: support@quickfynd.com
       </p>
       <p className="font-semibold mb-10">
-        Customer Support: +91 95263 67551
+        Customer Support: +91 7592875212
       </p>
     </div>
   );

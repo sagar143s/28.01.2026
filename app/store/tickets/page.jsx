@@ -215,6 +215,11 @@ export default function AdminTicketsPage() {
                         {ticket.userName} ({ticket.userEmail})
                       </span>
                       <span className="font-medium text-blue-600">{ticket.category}</span>
+                      {ticket.orderId && (
+                        <span className="font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                          Order #{ticket.orderId.orderNumber || ticket.orderId._id?.slice(-8) || 'N/A'}
+                        </span>
+                      )}
                       <span>Created: {new Date(ticket.createdAt).toLocaleDateString()}</span>
                       {ticket.replies && ticket.replies.length > 0 && (
                         <span className="flex items-center gap-1">

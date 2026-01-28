@@ -17,7 +17,9 @@ export async function GET(request, { params }) {
     await getAuth().verifyIdToken(idToken);
 
     const { ticketId } = params;
-    const ticket = await Ticket.findById(ticketId).lean();
+    const ticket = await Ticket.findById(ticketId)
+      .populate('orderId', 'orderNumber shortOrderNumber _id')
+      .lean();
 
     if (!ticket) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });

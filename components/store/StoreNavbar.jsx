@@ -3,6 +3,8 @@
 
 import Link from "next/link"
 import Image from "next/image";
+import { useState } from "react";
+import { LogOut } from "lucide-react";
 import Logo from "../../assets/Asset11.png";
 import { useAuth } from "@/lib/useAuth";
 import { signOut } from "firebase/auth";
@@ -11,10 +13,17 @@ import { auth } from "@/lib/firebase";
 
 const StoreNavbar = ({ storeInfo }) => {
     const { user } = useAuth();
+    const [showConfirm, setShowConfirm] = useState(false);
 
     const handleLogout = async () => {
-        await signOut(auth);
-        window.location.href = "/";
+        try {
+            await signOut(auth);
+            window.location.href = "/";
+        } catch (error) {
+            console.error("Logout failed", error);
+        } finally {
+            setShowConfirm(false);
+        }
     };
 
     return (
@@ -32,12 +41,46 @@ const StoreNavbar = ({ storeInfo }) => {
             <div className="flex items-center gap-3">
                 <p>Hi, {storeInfo?.name || user?.displayName || user?.name || user?.email || ''}</p>
                 <button
-                    onClick={handleLogout}
+                    onClick={() => setShowConfirm(true)}
                     className="ml-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition"
                 >
                     Logout
                 </button>
             </div>
+
+            {showConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                    <div
+                        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+                        onClick={() => setShowConfirm(false)}
+                    />
+                    <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="absolute -left-10 -top-14 h-40 w-40 bg-red-400/20 blur-3xl" />
+                        <div className="absolute -right-8 -bottom-12 h-36 w-36 bg-orange-300/20 blur-3xl" />
+                        <div className="relative p-6">
+                            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+                                <LogOut size={24} />
+                            </div>
+                            <h3 className="text-lg font-semibold text-slate-900 text-center">Sign out of seller mode?</h3>
+                            <p className="mt-2 text-sm text-slate-600 text-center">You can return anytime. We will keep your work safe.</p>
+                            <div className="mt-5 grid grid-cols-2 gap-3">
+                                <button
+                                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+                                    onClick={() => setShowConfirm(false)}
+                                >
+                                    Stay
+                                </button>
+                                <button
+                                    className="w-full rounded-xl bg-gradient-to-r from-red-500 to-orange-400 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200/50 hover:brightness-105 transition"
+                                    onClick={handleLogout}
+                                >
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

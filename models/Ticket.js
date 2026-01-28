@@ -18,6 +18,7 @@ const TicketSchema = new mongoose.Schema({
     enum: ['Order Issue', 'Product Question', 'Payment Issue', 'Account Issue', 'Other']
   },
   description: { type: String, required: true },
+  orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
   status: { 
     type: String, 
     default: 'open',

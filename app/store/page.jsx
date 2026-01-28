@@ -3,10 +3,11 @@ import Loading from "@/components/Loading"
 
 
 import axios from "axios"
-import { CircleDollarSignIcon, ShoppingBasketIcon, StarIcon, TagsIcon, UsersIcon, ShoppingCartIcon } from "lucide-react"
+import { CircleDollarSignIcon, ShoppingBasketIcon, StarIcon, TagsIcon, UsersIcon, ShoppingCartIcon, UserPlusIcon } from "lucide-react"
 import ContactMessagesSeller from "./ContactMessagesSeller.jsx";
 import dynamic from "next/dynamic";
 import Image from "next/image"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import toast from "react-hot-toast"
@@ -33,6 +34,12 @@ export default function Dashboard() {
         abandonedCarts: 0,
         ratings: [],
     })
+    
+    // Invitation states
+    const [inviteEmail, setInviteEmail] = useState('')
+    const [inviteLoading, setInviteLoading] = useState(false)
+    const [teamUsers, setTeamUsers] = useState([])
+    const [loadingUsers, setLoadingUsers] = useState(true)
     const dashboardCardsData = [
         { title: 'Total Products', value: dashboardData.totalProducts, icon: ShoppingBasketIcon },
         { title: 'Total Earnings', value: currency + dashboardData.totalEarnings, icon: CircleDollarSignIcon },
@@ -42,10 +49,27 @@ export default function Dashboard() {
         { title: 'Total Ratings', value: dashboardData.ratings?.length || 0, icon: StarIcon },
     ]
 
+    // Fetch team users
+    const fetchTeamUsers = async () => {
+        try {
+            const token = await getToken();
+            const { data } = await axios.get('/api/store/users', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const allUsers = [...(data.users || []), ...(data.pending || [])];
+            setTeamUsers(allUsers);
+        } catch (error) {
+            console.error('Failed to fetch team users:', error);
+        } finally {
+            setLoadingUsers(false);
+        }
+    };
+
     useEffect(() => {
         const fetchDashboard = async () => {
             if (!user) {
                 setLoading(false);
+                setLoadingUsers(false);
                 return;
             }
 
@@ -55,6 +79,9 @@ export default function Dashboard() {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setDashboardData(data.dashboardData);
+                
+                // Fetch team users
+                await fetchTeamUsers();
             } catch (error) {
                 console.error('Dashboard fetch error:', error);
                 toast.error(error?.response?.data?.error || 'Failed to load dashboard');
@@ -68,6 +95,32 @@ export default function Dashboard() {
         }
     }, [authLoading, user]);
 
+    const handleInviteUser = async (e) => {
+        e.preventDefault();
+        
+        if (teamUsers.length >= 5) {
+            toast.error('Maximum 5 team members allowed');
+            return;
+        }
+        
+        setInviteLoading(true);
+        try {
+            const token = await getToken();
+            const { data } = await axios.post('/api/store/users/invite', 
+                { email: inviteEmail }, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            toast.success(data.message || 'Invitation sent successfully!');
+            setInviteEmail('');
+            await fetchTeamUsers(); // Refresh the list
+        } catch (error) {
+            toast.error(error?.response?.data?.error || 'Failed to send invitation');
+        } finally {
+            setInviteLoading(false);
+        }
+    };
+
     if (authLoading || loading) return <Loading />
 
     if (!user) {
@@ -80,7 +133,16 @@ export default function Dashboard() {
 
     return (
         <div className=" text-slate-500 mb-28">
-            <h1 className="text-2xl">Seller <span className="text-slate-800 font-medium">Dashboard</span></h1>
+            <div className="flex items-center justify-between mb-4">
+                <h1 className="text-2xl">Seller <span className="text-slate-800 font-medium">Dashboard</span></h1>
+                <Link 
+                    href="/store/settings/users" 
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition shadow-sm"
+                >
+                    <UserPlusIcon size={18} />
+                    <span>Invite Team Members</span>
+                </Link>
+            </div>
 
             <div className="flex flex-wrap gap-5 my-10 mt-4">
                 {

@@ -16,17 +16,41 @@ export default function HelpPage() {
   const router = useRouter()
   const [user, setUser] = useState(undefined)
   const [submitting, setSubmitting] = useState(false)
+  const [orders, setOrders] = useState([])
+  const [loadingOrders, setLoadingOrders] = useState(true)
   const [formData, setFormData] = useState({
     subject: '',
     category: 'Order Issue',
     description: '',
-    priority: 'normal'
+    priority: 'normal',
+    orderId: ''
   })
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u ?? null))
     return () => unsub()
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      fetchOrders()
+    }
+  }, [user])
+
+  const fetchOrders = async () => {
+    try {
+      setLoadingOrders(true)
+      const token = await auth.currentUser.getIdToken(true)
+      const { data } = await axios.get('/api/orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setOrders(data.orders || [])
+    } catch (error) {
+      console.error('Failed to fetch orders:', error)
+    } finally {
+      setLoadingOrders(false)
+    }
+  }
 
   if (user === undefined) return <Loading />
 
@@ -115,7 +139,7 @@ export default function HelpPage() {
                   headers: { Authorization: `Bearer ${token}` }
                 })
                 toast.success('Ticket submitted successfully!')
-                setFormData({ subject: '', category: 'Order Issue', description: '', priority: 'normal' })
+                setFormData({ subject: '', category: 'Order Issue', description: '', priority: 'normal', orderId: '' })
                 router.push('/dashboard/tickets')
               } catch (error) {
                 console.error('Failed to submit ticket:', error)
@@ -150,6 +174,37 @@ export default function HelpPage() {
                   <option>Other</option>
                 </select>
               </div>
+              
+              {/* Order Selection */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Related Order <span className="text-xs text-slate-500">(Optional)</span>
+                </label>
+                {loadingOrders ? (
+                  <div className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 text-sm">
+                    Loading your orders...
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 text-sm">
+                    No orders found
+                  </div>
+                ) : (
+                  <select 
+                    value={formData.orderId}
+                    onChange={(e) => setFormData({ ...formData, orderId: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  >
+                    <option value="">Select an order (optional)</option>
+                    {orders.map((order) => (
+                      <option key={order._id} value={order._id}>
+                        Order #{order.orderNumber || order._id.slice(-8)} - ₹{order.total} - {new Date(order.createdAt).toLocaleDateString()} - {order.status}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-xs text-slate-500 mt-1">Select an order if your ticket is related to a specific purchase</p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Priority *</label>
                 <select 

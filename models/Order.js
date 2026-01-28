@@ -24,6 +24,8 @@ const OrderSchema = new mongoose.Schema({
   guestName: String,
   guestEmail: String,
   guestPhone: String,
+  alternatePhone: String,
+  alternatePhoneCode: String,
   shippingAddress: Object,
   trackingId: { type: String, index: true },
   courier: String,
@@ -34,6 +36,19 @@ const OrderSchema = new mongoose.Schema({
   cancelReason: String,
   returnReason: String,
   notes: String,
+  // Return & Replacement
+  returns: [{
+    itemIndex: Number,
+    reason: String,
+    type: { type: String, enum: ['RETURN', 'REPLACEMENT'], default: 'RETURN' },
+    status: { type: String, enum: ['REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED'], default: 'REQUESTED' },
+    description: String,
+    images: [String],
+    requestedAt: { type: Date, default: Date.now },
+    approvedAt: Date,
+    rejectionReason: String,
+    sellerNotes: String,
+  }],
   // Add more fields as needed
 }, { timestamps: true });
 

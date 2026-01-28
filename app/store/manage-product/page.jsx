@@ -27,6 +27,7 @@ export default function StoreManageProducts() {
     const [editingProduct, setEditingProduct] = useState(null)
     const [showEditModal, setShowEditModal] = useState(false)
     const [categoryMap, setCategoryMap] = useState({}) // Map of category ID to name
+    const [searchQuery, setSearchQuery] = useState('')
 
     const fetchStoreProducts = async () => {
         try {
@@ -121,9 +122,49 @@ export default function StoreManageProducts() {
 
     if (loading) return <Loading />
 
+    // Filter products based on search query
+    const filteredProducts = products.filter(product => {
+        const query = searchQuery.toLowerCase();
+        
+        // Search in product name
+        if (product.name?.toLowerCase().includes(query)) return true;
+        
+        // Search in SKU
+        if (product.sku?.toLowerCase().includes(query)) return true;
+        
+        // Search in categories
+        if (product.categories?.some(catId => categoryMap[catId]?.toLowerCase().includes(query))) return true;
+        if (product.category && categoryMap[product.category]?.toLowerCase().includes(query)) return true;
+        
+        // Search in tags
+        if (product.tags?.some(tag => tag.toLowerCase().includes(query))) return true;
+        
+        // Search in description
+        if (product.description?.toLowerCase().includes(query)) return true;
+        
+        return false;
+    });
+
     return (
         <>
             <h1 className="text-2xl text-slate-500 mb-5">Manage <span className="text-slate-800 font-medium">Products</span></h1>
+            
+            {/* Search Bar */}
+            <div className="mb-4 max-w-5xl">
+                <input
+                    type="text"
+                    placeholder="Search products by name, SKU, category, tags, or description..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchQuery && (
+                    <p className="text-sm text-slate-600 mt-2">
+                        Found {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
+                    </p>
+                )}
+            </div>
+
             <table className="w-full max-w-5xl text-left  ring ring-slate-200  rounded overflow-hidden text-sm">
                 <thead className="bg-slate-50 text-gray-700 uppercase tracking-wider">
                     <tr>
@@ -140,7 +181,7 @@ export default function StoreManageProducts() {
                     </tr>
                 </thead>
                 <tbody className="text-slate-700">
-                    {products.map((product) => (
+                    {filteredProducts.map((product) => (
                         <tr key={product._id} className="border-t border-gray-200 hover:bg-gray-50">
                             <td className="px-4 py-3">
                                 <div className="flex gap-2 items-center">

@@ -20,6 +20,7 @@ export async function GET(request) {
     // For now, assuming authenticated user is admin
 
     const tickets = await Ticket.find({})
+      .populate('orderId', 'orderNumber shortOrderNumber _id')
       .sort({ createdAt: -1, priority: -1 })
       .lean();
 

@@ -23,25 +23,36 @@ export async function POST(request) {
         }
         const formData = await request.formData();
         const image = formData.get('image');
+        const type = formData.get('type'); // 'logo' or 'banner'
+        
         if (!image) {
             return Response.json({ error: "No image provided" }, { status: 400 });
         }
-        // Convert file to buffer (same as product images)
+        
+        // Convert file to buffer
         const buffer = Buffer.from(await image.arrayBuffer());
+        
+        // Determine folder and transformation based on type
+        const folder = type === 'logo' ? 'stores/logos' : type === 'banner' ? 'stores/banners' : 'products/descriptions';
+        const fileName = type ? `${type}_${Date.now()}_${image.name}` : `desc_${Date.now()}_${image.name}`;
+        
         // Upload to ImageKit
         const response = await imagekit.upload({
             file: buffer,
-            fileName: `desc_${Date.now()}_${image.name}`,
-            folder: "products/descriptions"
+            fileName: fileName,
+            folder: folder
         });
-        // Return transformed URL
+        
+        // Return transformed URL based on type
+        const transformation = type === 'logo' 
+            ? [{ quality: "auto" }, { format: "webp" }, { width: "200", height: "200" }]
+            : type === 'banner'
+            ? [{ quality: "auto" }, { format: "webp" }, { width: "1200" }]
+            : [{ quality: "auto" }, { format: "webp" }, { width: "800" }];
+        
         const url = imagekit.url({
             path: response.filePath,
-            transformation: [
-                { quality: "auto" },
-                { format: "webp" },
-                { width: "800" }
-            ]
+            transformation: transformation
         });
         return Response.json({ 
             success: true, 

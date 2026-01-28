@@ -54,7 +54,7 @@ This application sends automated emails to customers for various events using Re
 RESEND_API_KEY=re_CVyyMDU5_7AQJkrZe2qKq9593VBaApfpA
 EMAIL_FROM=onboarding@resend.dev
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_ADMIN_EMAIL=quickfynd.com@gmail.com
+NEXT_PUBLIC_ADMIN_EMAIL=
 ```
 
 ### Email Service

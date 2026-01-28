@@ -694,7 +694,14 @@ const ProductDetails = ({ product, reviews = [] }) => {
                   {reviewCount > 0 ? `${reviewCount} Reviews` : 'No reviews'}
                 </span>
                 {reviewCount > 0 && (
-                  <a href="#reviews" className="text-sm text-blue-600 hover:underline">
+                  <a 
+                    href="#reviews" 
+                    className="text-sm text-blue-600 hover:underline"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  >
                     (See Reviews)
                   </a>
                 )}

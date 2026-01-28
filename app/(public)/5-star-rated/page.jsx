@@ -145,7 +145,7 @@ export default function FiveStarRated() {
                         {loading ? (
                             <div className="text-center py-16 text-gray-500">Loading top-rated products…</div>
                         ) : filteredAndSorted.length > 0 ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-4 md:gap-6">
                                 {filteredAndSorted.map((product, idx) => (
                                     <ProductCard key={product._id || product.id || idx} product={product} />
                                 ))}

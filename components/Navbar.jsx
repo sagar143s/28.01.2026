@@ -1,6 +1,6 @@
 "use client";
 
-import { PackageIcon, Search, ShoppingCart, LifeBuoy, Menu, X, HeartIcon, StarIcon, ArrowLeft } from "lucide-react";
+import { PackageIcon, Search, ShoppingCart, LifeBuoy, Menu, X, HeartIcon, StarIcon, ArrowLeft, LogOut } from "lucide-react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
@@ -12,6 +12,8 @@ import Image from 'next/image';
 import axios from "axios";
 import toast from "react-hot-toast";
 import Logo from "../assets/logo/Asset 6.png";
+import LogoWhite from "../assets/logo/Asset 11.png";
+import LogoMobile from "../assets/logo/Asset 3.png";
 import Truck from '../assets/delivery.png';
 import SignInModal from './SignInModal';
 
@@ -54,10 +56,13 @@ const Navbar = () => {
   const hoverTimer = useRef(null);
   const categoryTimer = useRef(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [wishlistCount, setWishlistCount] = useState(0);
   const cartCount = useSelector((state) => state.cart.total);
   const [signInOpen, setSignInOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState(undefined);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+  const [signOutContext, setSignOutContext] = useState('desktop');
 
   // Show sign-in modal automatically on mobile for guest users
   useEffect(() => {
@@ -70,6 +75,71 @@ const Navbar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const isHomePage = pathname === '/';
+
+  const openSignOutConfirm = (context = 'desktop') => {
+    setSignOutContext(context);
+    setSignOutConfirmOpen(true);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      // Store user info before signing out (for background email)
+      const userEmail = user?.email;
+      const userName = user?.displayName || 'Customer';
+      
+      console.log('[Sign Out] Email:', userEmail, 'Name:', userName);
+      
+      // Sign out immediately
+      await auth.signOut();
+      
+      // Update UI
+      setUserDropdownOpen(false);
+      setMobileMenuOpen(false);
+      setSignOutConfirmOpen(false);
+      toast.success('Signed out successfully');
+      
+      // Send email in background (completely non-blocking, no auth required)
+      if (userEmail) {
+        console.log('[Sign Out] Sending email to:', userEmail);
+        setTimeout(() => {
+          axios.post('/api/send-signout-email', {
+            email: userEmail,
+            name: userName,
+            skipAuth: true
+          })
+          .then(() => {
+            console.log('[Sign Out] Email sent successfully');
+          })
+          .catch((err) => {
+            console.error('[Sign Out] Email failed:', err.response?.data || err.message);
+          });
+        }, 100);
+      } else {
+        console.log('[Sign Out] No email to send to');
+      }
+      
+      // Navigate
+      if (signOutContext === 'mobile') {
+        setTimeout(() => window.location.reload(), 100);
+      } else {
+        router.push('/');
+      }
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Force sign out even if there's an error
+      try {
+        await auth.signOut();
+        setUserDropdownOpen(false);
+        setMobileMenuOpen(false);
+        setSignOutConfirmOpen(false);
+        router.push('/');
+        window.location.reload();
+      } catch (finalError) {
+        toast.error('Please refresh the page to complete sign out.');
+        setTimeout(() => window.location.reload(), 1000);
+      }
+    }
+  };
 
   // (already declared above)
 
@@ -192,7 +262,12 @@ const Navbar = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      setWishlistCount(data.wishlist?.length || 0);
+      // Only count wishlist items that have valid products (same filter as wishlist page)
+      const validItems = data.wishlist?.filter(item => {
+        const product = item.product || item;
+        return product && (product.name || product._id);
+      }) || [];
+      setWishlistCount(validItems.length);
     } catch (error) {
       console.error('Error fetching wishlist count:', error);
       setWishlistCount(0);
@@ -264,35 +339,42 @@ const Navbar = () => {
     <>
       {/* Mobile-Only Simple Navbar for Non-Home Pages */}
       {!isHomePage && (
-        <nav className="lg:hidden sticky top-0 z-50 shadow-sm bg-white">
-          <div className="flex items-center gap-3 px-4 py-3">
-            {/* Back Button */}
-            <button 
-              onClick={() => router.back()} 
-              className="p-2 hover:bg-gray-100 rounded-full transition flex-shrink-0"
-            >
-              <ArrowLeft size={20} className="text-gray-700" />
-            </button>
+        <nav className="lg:hidden sticky top-0 z-50 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-white">
+            {/* Left: Logo */}
+            <Link href="/" className="flex items-center flex-shrink-0">
+              <Image 
+                src={LogoMobile} 
+                alt="Quickfynd" 
+                width={120} 
+                height={32}
+                className="h-8 w-auto object-contain"
+                priority
+              />
+            </Link>
 
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="flex-1">
-              <div className="flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-full border border-gray-200">
+            {/* Center: Search Bar */}
+            <form onSubmit={handleSearch} className="flex-1 max-w-md">
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-md border border-gray-200">
                 <Search size={16} className="text-gray-500 flex-shrink-0" />
                 <input
                   type="text"
-                  placeholder="Search for products"
+                  placeholder="Search products..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-transparent outline-none placeholder-gray-500 text-gray-700 text-sm"
+                  className="w-full bg-transparent outline-none placeholder-gray-400 text-gray-800 text-sm"
                 />
               </div>
             </form>
 
-            {/* Cart Icon */}
-            <button onClick={handleCartClick} className="relative p-2 hover:bg-gray-100 rounded-full transition flex-shrink-0">
-              <ShoppingCart size={20} className="text-gray-700" />
+            {/* Right: Cart */}
+            <button 
+              onClick={handleCartClick} 
+              className="relative p-2 flex-shrink-0"
+            >
+              <ShoppingCart size={22} className="text-gray-800" strokeWidth={2} />
               {isClient && cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 text-[10px] font-bold text-white bg-blue-600 rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                   {cartCount}
                 </span>
               )}
@@ -333,12 +415,12 @@ const Navbar = () => {
               Top Selling Items
             </Link>
           
-            <Link href="/new" className="text-sm font-medium text-white hover:text-orange-500 transition whitespace-nowrap flex items-center gap-1.5">
+            {/* <Link href="/new" className="text-sm font-medium text-white hover:text-orange-500 transition whitespace-nowrap flex items-center gap-1.5">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
               New
-            </Link>
+            </Link> */}
 
             <Link href="/5-star-rated" className="text-sm font-medium text-white hover:text-orange-500 transition whitespace-nowrap flex items-center gap-1.5">
               <StarIcon size={16} className="text-orange-500" fill="#f97316" />
@@ -591,12 +673,7 @@ const Navbar = () => {
                     <div className="my-1 border-t border-gray-200" />
                     <button
                       className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 transition text-sm"
-                      onClick={async () => {
-                        await auth.signOut();
-                        setUserDropdownOpen(false);
-                        router.push('/');
-                        toast.success('Signed out successfully');
-                      }}
+                      onClick={() => openSignOutConfirm('desktop')}
                     >
                       Sign Out
                     </button>
@@ -925,12 +1002,7 @@ const Navbar = () => {
                 {firebaseUser && (
                   <button
                     className="w-full text-left px-4 py-3 bg-red-50 hover:bg-red-100 rounded-lg transition text-red-600 font-medium mt-4"
-                    onClick={async () => {
-                      await auth.signOut();
-                      setMobileMenuOpen(false);
-                      toast.success('Signed out successfully');
-                      window.location.reload();
-                    }}
+                    onClick={() => openSignOutConfirm('mobile')}
                   >
                     Sign Out
                   </button>
@@ -939,6 +1011,41 @@ const Navbar = () => {
             </div>
           </div>
         )}
+
+
+          {signOutConfirmOpen && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+                onClick={() => setSignOutConfirmOpen(false)}
+              />
+              <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="absolute -left-12 -top-16 h-48 w-48 bg-rose-400/25 blur-3xl" />
+                <div className="absolute -right-12 -bottom-16 h-48 w-48 bg-amber-300/25 blur-3xl" />
+                <div className="relative p-6">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                    <LogOut size={26} />
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-900 text-center">Ready to sign out?</h3>
+                  <p className="mt-2 text-sm text-slate-600 text-center">We will save your cart and wishlist. You can jump back in anytime.</p>
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
+                      onClick={() => setSignOutConfirmOpen(false)}
+                    >
+                      Stay Signed In
+                    </button>
+                    <button
+                      className="w-full rounded-xl bg-gradient-to-r from-rose-500 to-orange-400 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200/50 hover:brightness-105 transition"
+                      onClick={handleSignOut}
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
 
       {/* Sign In Modal (always at Navbar root) */}

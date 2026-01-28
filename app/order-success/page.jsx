@@ -170,6 +170,23 @@ function OrderSuccessContent() {
                 <div className='font-semibold text-right'>{currency} {total.toLocaleString()}</div>
               </div>
             </div>
+            {order?.shippingAddress && (
+              <div className='bg-white rounded-lg shadow border border-gray-100 p-4 mt-6'>
+                <div className='font-semibold text-gray-900 mb-2'>Shipping address</div>
+                <div className='text-sm text-gray-700 space-y-1'>
+                  <div className='font-medium'>{order.shippingAddress.name}</div>
+                  <div>{order.shippingAddress.street}</div>
+                  <div>{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}</div>
+                  <div>{order.shippingAddress.country}</div>
+                  {order.shippingAddress.phone && (
+                    <div>Phone: {(order.shippingAddress.phoneCode || '+91')} {order.shippingAddress.phone}</div>
+                  )}
+                  {order.shippingAddress.alternatePhone && (
+                    <div className='text-gray-600'>Alternate: {(order.shippingAddress.alternatePhoneCode || order.shippingAddress.phoneCode || '+91')} {order.shippingAddress.alternatePhone}</div>
+                  )}
+                </div>
+              </div>
+            )}
             {!user && (
               <div className='bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-8 text-center'>
                 <div className='text-yellow-800 font-semibold mb-2'>

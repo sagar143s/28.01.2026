@@ -14,6 +14,7 @@ function PublicLayoutAuthed({ children }) {
     const { cartItems } = useSelector((state) => state.cart);
     const pathname = usePathname();
     const isHomePage = pathname === '/';
+    const isCheckout = pathname === '/checkout';
 
     useEffect(() => { 
         // Defer product fetch to allow critical content to load first
@@ -28,7 +29,7 @@ function PublicLayoutAuthed({ children }) {
             <GuestOrderLinker />
             {/* <Banner />/ */}
             <main className={`flex-1 ${isHomePage ? 'pb-8' : 'pb-20'} lg:pb-0`}>{children}</main>
-            {!isHomePage && <MobileBottomNav />}
+            {!isHomePage && !isCheckout && <MobileBottomNav />}
         </div>
     );
 }

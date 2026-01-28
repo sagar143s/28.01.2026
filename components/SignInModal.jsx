@@ -6,6 +6,7 @@ import Image from 'next/image';
 import GoogleIcon from '../assets/google.png';
 import Imageslider from '../assets/signin/76.webp';
 import axios from 'axios';
+import { countryCodes } from '../assets/countryCodes';
 
 const SignInModal = ({ open, onClose }) => {
   const [isRegister, setIsRegister] = useState(false);
@@ -13,6 +14,8 @@ const SignInModal = ({ open, onClose }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [scrollPos, setScrollPos] = useState(0);
@@ -39,6 +42,7 @@ const SignInModal = ({ open, onClose }) => {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
+      const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
       
       // Check if welcome bonus was claimed from top bar
       const bonusClaimed = localStorage.getItem('welcomeBonusClaimed');
@@ -48,20 +52,22 @@ const SignInModal = ({ open, onClose }) => {
         localStorage.removeItem('welcomeBonusClaimed');
       }
       
-      // Send welcome email for new users
+      // Send appropriate email based on whether user is new or returning
       try {
         const token = await result.user.getIdToken();
-        await axios.post('/api/send-welcome-email', {
+        const emailEndpoint = isNewUser ? '/api/send-welcome-email' : '/api/send-login-email';
+        axios.post(emailEndpoint, {
           email: result.user.email,
           name: result.user.displayName
         }, {
           headers: {
             Authorization: `Bearer ${token}`
           }
+        }).catch(() => {
+          // Silently fail
         });
       } catch (emailError) {
-        console.error('Failed to send welcome email:', emailError);
-        // Don't fail the signup if email fails
+        console.log('Failed to send email (non-critical)');
       }
       
       onClose();
@@ -117,11 +123,47 @@ const SignInModal = ({ open, onClose }) => {
           // Don't fail the signup if email fails
         }
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Send login notification email in background
+        try {
+          const token = await userCredential.user.getIdToken();
+          axios.post('/api/send-login-email', {
+            email: email,
+            name: userCredential.user.displayName || name || 'Customer'
+          }, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }).catch(() => {
+            // Silently fail - don't block login
+          });
+        } catch (emailError) {
+          console.log('Failed to send login email (non-critical)');
+        }
       }
       onClose();
     } catch (err) {
-      setError(err.message || 'Authentication failed');
+      // User-friendly error messages
+      let errorMessage = 'Authentication failed';
+      
+      if (err.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already registered. Please sign in or use a different email.';
+      } else if (err.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak. Please use at least 6 characters.';
+      } else if (err.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address. Please check and try again.';
+      } else if (err.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email. Please sign up first.';
+      } else if (err.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (err.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     }
     setLoading(false);
   };
@@ -221,6 +263,30 @@ const SignInModal = ({ open, onClose }) => {
                 onChange={e => setName(e.target.value)}
                 required
               />
+            )}
+            {isRegister && (
+              <div className="flex gap-2">
+                <select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-2 sm:px-3 py-2 sm:py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-xs sm:text-sm w-24"
+                  required
+                >
+                  {countryCodes.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  placeholder="Phone Number"
+                  className="flex-1 border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-xs sm:text-sm"
+                  value={phoneNumber}
+                  onChange={e => setPhoneNumber(e.target.value)}
+                  required
+                />
+              </div>
             )}
             <input
               type={isRegister ? "email" : "text"}

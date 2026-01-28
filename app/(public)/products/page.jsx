@@ -20,6 +20,7 @@ function ProductsContent() {
     const [showFilters, setShowFilters] = useState(false)
     const [filters, setFilters] = useState({
         category: categoryParam || '',
+        categories: [],
         priceRange: [0, 100000],
         minRating: 0,
         inStock: false
@@ -41,10 +42,21 @@ function ProductsContent() {
         }))
     }
 
+    // Toggle category in multi-select
+    const toggleCategory = (category) => {
+        setFilters(prev => ({
+            ...prev,
+            categories: prev.categories.includes(category)
+                ? prev.categories.filter(c => c !== category)
+                : [...prev.categories, category]
+        }))
+    }
+
     // Clear all filters
     const clearFilters = () => {
         setFilters({
             category: '',
+            categories: [],
             priceRange: [0, 100000],
             minRating: 0,
             inStock: false
@@ -59,9 +71,14 @@ function ProductsContent() {
         // Only include products with a slug
         filtered = filtered.filter(p => p.slug && typeof p.slug === 'string' && p.slug.length > 0)
 
-        // Filter by category
+        // Filter by category (single select - from URL param)
         if (filters.category) {
             filtered = filtered.filter(p => p.category === filters.category)
+        }
+
+        // Filter by categories (multi-select checkboxes)
+        if (filters.categories.length > 0) {
+            filtered = filtered.filter(p => filters.categories.includes(p.category))
         }
 
         // Filter by price range

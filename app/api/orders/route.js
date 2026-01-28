@@ -239,6 +239,9 @@ export async function POST(request) {
                         name: guestInfo.name,
                         email: guestInfo.email,
                         phone: guestInfo.phone,
+                        phoneCode: guestInfo.phoneCode || '+91',
+                        alternatePhone: guestInfo.alternatePhone || '',
+                        alternatePhoneCode: guestInfo.alternatePhoneCode || guestInfo.phoneCode || '+91',
                         street: guestInfo.address || guestInfo.street,
                         city: guestInfo.city || 'Guest',
                         state: guestInfo.state || 'Guest',
@@ -250,6 +253,9 @@ export async function POST(request) {
                         name: guestInfo.name,
                         email: guestInfo.email,
                         phone: guestInfo.phone,
+                        phoneCode: guestInfo.phoneCode || '+91',
+                        alternatePhone: guestInfo.alternatePhone || '',
+                        alternatePhoneCode: guestInfo.alternatePhoneCode || guestInfo.phoneCode || '+91',
                         street: guestInfo.address || guestInfo.street,
                         city: guestInfo.city || 'Guest',
                         state: guestInfo.state || 'Guest',
@@ -262,6 +268,8 @@ export async function POST(request) {
                 orderData.guestName = guestInfo.name;
                 orderData.guestEmail = guestInfo.email;
                 orderData.guestPhone = guestInfo.phone;
+                orderData.alternatePhone = guestInfo.alternatePhone || '';
+                orderData.alternatePhoneCode = guestInfo.alternatePhoneCode || guestInfo.phoneCode || '';
 
                 // Upsert guestUser record
                 const convertToken = crypto.randomBytes(32).toString('hex');
@@ -290,6 +298,9 @@ export async function POST(request) {
                             name: address.name,
                             email: address.email,
                             phone: address.phone,
+                            phoneCode: address.phoneCode || '+91',
+                            alternatePhone: address.alternatePhone || '',
+                            alternatePhoneCode: address.alternatePhoneCode || address.phoneCode || '+91',
                             street: address.street,
                             city: address.city,
                             state: address.state,
@@ -297,6 +308,8 @@ export async function POST(request) {
                             country: address.country,
                             district: address.district || ''
                         };
+                        orderData.alternatePhone = address.alternatePhone || '';
+                        orderData.alternatePhoneCode = address.alternatePhoneCode || address.phoneCode || '';
                     }
                 } else if (addressData && addressData.street) {
                     // User provided address data inline - save it and use it
@@ -305,6 +318,9 @@ export async function POST(request) {
                         name: addressData.name,
                         email: addressData.email,
                         phone: addressData.phone,
+                        phoneCode: addressData.phoneCode || '+91',
+                        alternatePhone: addressData.alternatePhone || '',
+                        alternatePhoneCode: addressData.alternatePhoneCode || addressData.phoneCode || '+91',
                         street: addressData.street,
                         city: addressData.city,
                         state: addressData.state,
@@ -317,6 +333,9 @@ export async function POST(request) {
                         name: addressData.name,
                         email: addressData.email,
                         phone: addressData.phone,
+                        phoneCode: addressData.phoneCode || '+91',
+                        alternatePhone: addressData.alternatePhone || '',
+                        alternatePhoneCode: addressData.alternatePhoneCode || addressData.phoneCode || '+91',
                         street: addressData.street,
                         city: addressData.city,
                         state: addressData.state,
@@ -324,6 +343,8 @@ export async function POST(request) {
                         country: addressData.country,
                         district: addressData.district || ''
                     };
+                    orderData.alternatePhone = addressData.alternatePhone || '';
+                    orderData.alternatePhoneCode = addressData.alternatePhoneCode || addressData.phoneCode || '';
                 }
                 console.log('FINAL orderData before Order.create:', JSON.stringify(orderData, null, 2));
             }

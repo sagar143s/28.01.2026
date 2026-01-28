@@ -126,7 +126,7 @@ export default function ContactUs() {
             href="tel:+919526367551"
             className="text-orange-600 hover:underline"
           >
-            +91 95263 67551
+            +91 7592875212
           </a>
         </p>
       </div>

@@ -5,6 +5,10 @@ export default function AboutPage() {
       a: "QuickFynd is a curated online shopping brand offering useful, everyday products at honest prices across India.",
     },
     {
+      q: "Do you provide GST invoice details?",
+      a: "Yes. QuickFynd operates under the trade name NILAAS. GSTIN: 32JWYPS4831L1Z1. These details appear on invoices; contact us if you need GST billing support.",
+    },
+    {
       q: "Do you offer Cash on Delivery (COD)?",
       a: "Yes, COD is available on many serviceable pincodes. You’ll see the option at checkout when available.",
     },
@@ -60,7 +64,24 @@ export default function AboutPage() {
           </div>
 
           {/* Side Card */}
-       
+          <div className="bg-white/80 backdrop-blur rounded-xl border border-gray-100 shadow-sm p-5 sm:p-6">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Business Details
+            </div>
+            <div className="mt-3 space-y-2 text-sm text-gray-800">
+              <p className="font-semibold text-gray-900">Trade Name: NILAAS</p>
+              <p>
+                Brand: QuickFynd (operated under NILAAS)
+              </p>
+              <p className="font-mono text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 w-fit">
+                GSTIN: 32JWYPS4831L1Z1
+              </p>
+              <p className="text-xs text-gray-600">
+                Use this GST and trade name for invoices and tax purposes. For GST invoice help, please contact support.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -79,8 +100,9 @@ export default function AboutPage() {
             products that offer value — not just hype.
           </p>
           <p className="text-sm sm:text-base text-gray-700">
-            Guided and supported by <span className="font-semibold">Nilaas</span>, we work towards
-            better product curation, service, and customer experience on every order.
+            Guided and supported by <span className="font-semibold">NILAAS</span>, we work towards
+            better product curation, service, and customer experience on every order. QuickFynd operates
+            under the trade name NILAAS (GSTIN: 32JWYPS4831L1Z1).
           </p>
 
           <div className="grid grid-cols-2 gap-3 pt-2">

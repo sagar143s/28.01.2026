@@ -14,10 +14,17 @@ export async function GET(request) {
         const idToken = authHeader.split(' ')[1];
         let decodedToken;
         try {
+            // Set GCLOUD_PROJECT env var before verifying token to fix Project ID detection
+            if (!process.env.GCLOUD_PROJECT && process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+                const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+                process.env.GCLOUD_PROJECT = serviceAccount.project_id;
+                process.env.GOOGLE_CLOUD_PROJECT = serviceAccount.project_id;
+            }
             decodedToken = await getAuth().verifyIdToken(idToken);
         } catch (err) {
-            console.log('[is-seller API] Invalid or expired token:', err.message);
-            return NextResponse.json({ isSeller: false, reason: 'invalid-token' }, { status: 200 });
+            console.log('[is-seller API] Token verification error:', err.message);
+            console.log('[is-seller API] Token (first 20 chars):', idToken?.substring(0, 20));
+            return NextResponse.json({ isSeller: false, reason: 'invalid-token', error: err.message }, { status: 200 });
         }
         const userId = decodedToken.uid;
         console.log('[is-seller API] Checking seller status for userId:', userId);

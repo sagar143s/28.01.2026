@@ -146,6 +146,15 @@ export default function AdminTicketDetailPage() {
             <div className="flex items-center gap-4 text-sm text-slate-600 flex-wrap">
               <span>Customer: <strong>{ticket.userName}</strong> ({ticket.userEmail})</span>
               <span className="font-medium text-blue-600">{ticket.category}</span>
+              {ticket.orderId && (
+                <span className="font-bold text-purple-700 bg-purple-100 px-3 py-1 rounded-lg flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                  </svg>
+                  Order #{ticket.orderId.orderNumber || ticket.orderId._id?.slice(-8) || 'N/A'}
+                </span>
+              )}
               <span>Created: {new Date(ticket.createdAt).toLocaleDateString()}</span>
             </div>
           </div>
