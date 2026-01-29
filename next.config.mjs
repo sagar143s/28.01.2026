@@ -23,7 +23,7 @@ if (!domains.includes('lh3.googleusercontent.com')) domains.push('lh3.googleuser
 
 const nextConfig = {
     images: {
-        unoptimized: false,
+        unoptimized: true,
         domains,
         // Allow the same hosts via remotePatterns for fine-grained control
         remotePatterns: domains.map((host) => ({ protocol: 'https', hostname: host, pathname: '/:path*' })),
