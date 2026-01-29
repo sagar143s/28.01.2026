@@ -9,11 +9,20 @@ export default function WalletPage() {
   const [error, setError] = useState("");
   const [fetching, setFetching] = useState(false);
 
-  useEffect(() => {
-    const loadWallet = async () => {
-      if (!user || !getToken) return;
+  const openSignIn = () => {
+    const signInEvent = new CustomEvent('openSignInModal', { detail: { mode: 'login' } });
+    window.dispatchEvent(signInEvent);
+  };
+
+  const loadWallet = async () => {
+      if (loading) return;
+      if (!user || !getToken) {
+        setError("Please sign in to view your wallet.");
+        return;
+      }
       try {
         setFetching(true);
+        setError("");
         const token = await getToken(true);
         if (!token) {
           setError("Please sign in to view your wallet.");
@@ -42,15 +51,27 @@ export default function WalletPage() {
         setFetching(false);
       }
     };
+
+  useEffect(() => {
     loadWallet();
-  }, [user, getToken]);
+  }, [user, getToken, loading]);
 
   if (loading) return null;
 
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center text-slate-600">Please sign in to view your wallet.</div>
+        <div className="text-center text-slate-600">
+          Please sign in to view your wallet.
+          <div className="mt-3">
+            <button
+              onClick={openSignIn}
+              className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -72,6 +93,9 @@ export default function WalletPage() {
             </div>
           </div>
           <p className="text-xs text-slate-500 mt-2">Earn 10 coins for every ₹100 delivered. Redeem 10 coins for ₹5.</p>
+          <a href="/wallet/details" className="text-xs text-blue-600 hover:underline mt-2 inline-block">
+            View wallet rules
+          </a>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-6">
@@ -81,6 +105,14 @@ export default function WalletPage() {
             <div className="text-red-600 text-sm mb-3">
               {error}
             </div>
+          )}
+          {error && (
+            <button
+              onClick={loadWallet}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Retry
+            </button>
           )}
           {!fetching && wallet.transactions.length === 0 && (
             <div className="text-slate-500 text-sm">No wallet activity yet.</div>
