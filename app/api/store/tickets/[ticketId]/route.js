@@ -17,7 +17,7 @@ export async function GET(request, { params }) {
     await getAuth().verifyIdToken(idToken);
 
     const { ticketId } = params;
-    const ticket = await Ticket.findById(ticketId)
+    const ticket = await Ticket.findById(ticketId).lean()
       .populate('orderId', 'orderNumber shortOrderNumber _id')
       .lean();
 

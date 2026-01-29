@@ -33,7 +33,7 @@ export async function POST(request) {
 
     await dbConnect();
 
-    const product = await Product.findById(productId);
+    const product = await Product.findById(productId).lean();
     if (!product) {
       return Response.json({ error: "Product not found" }, { status: 404 });
     }

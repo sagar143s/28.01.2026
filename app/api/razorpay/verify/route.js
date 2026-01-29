@@ -43,7 +43,7 @@ export async function POST(request) {
       // If paying for an existing COD order (upsell), update that order instead of creating a new one
       if (paymentPayload && paymentPayload.existingOrderId) {
         try {
-          const existingOrder = await Order.findById(paymentPayload.existingOrderId);
+          const existingOrder = await Order.findById(paymentPayload.existingOrderId).lean();
           if (!existingOrder) {
             return NextResponse.json({ success: false, message: 'Existing order not found' }, { status: 404 });
           }

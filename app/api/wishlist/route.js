@@ -85,7 +85,7 @@ export async function POST(request) {
         await dbConnect();
         if (action === 'add') {
             // Check if already in wishlist
-            const existing = await WishlistItem.findOne({ userId, productId });
+            const existing = await WishlistItem.findOne({ userId, productId }).lean();
 
             if (existing) {
                 return NextResponse.json({ message: 'Already in wishlist', inWishlist: true });

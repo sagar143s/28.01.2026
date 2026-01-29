@@ -38,7 +38,7 @@ export async function POST(request) {
             return Response.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        const review = await Rating.findById(reviewId)
+        const review = await Rating.findById(reviewId).lean()
             .populate({
                 path: 'productId',
                 select: 'storeId'

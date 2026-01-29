@@ -50,7 +50,7 @@ export async function POST(request){
         // check if product exists
         let product;
         try {
-            product = await Product.findOne({ _id: productId, storeId });
+            product = await Product.findOne({ _id: productId, storeId }).lean();
         } catch (err) {
             console.error('Product.findOne error:', err, 'productId:', productId);
             return NextResponse.json({ error: "Invalid productId format" }, { status: 400 });

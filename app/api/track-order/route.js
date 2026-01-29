@@ -54,26 +54,26 @@ export async function GET(req) {
     if (awb) {
       const awbTrim = awb.trim();
       // 1. Try by trackingId
-      order = await Order.findOne({ trackingId: awbTrim })
+      order = await Order.findOne({ trackingId: awbTrim }).lean()
         .populate('orderItems.productId')
         .sort({ createdAt: -1 })
         .lean();
       // 2. Try by full orderId (ObjectId)
       if (!order && /^[a-fA-F0-9]{24}$/.test(awbTrim)) {
-        order = await Order.findOne({ _id: awbTrim })
+        order = await Order.findOne({ _id: awbTrim }).lean()
           .populate('orderItems.productId')
           .lean();
       }
       // 3. Try by shortOrderNumber field
       if (!order && /^\d{1,}$/.test(awbTrim)) {
-        order = await Order.findOne({ shortOrderNumber: Number(awbTrim) })
+        order = await Order.findOne({ shortOrderNumber: Number(awbTrim) }).lean()
           .populate('orderItems.productId')
           .lean();
       }
     }
     // 4. Try by phone number if provided (fallback)
     if (!order && phone) {
-      order = await Order.findOne({ 'shippingAddress.phone': phone.trim() })
+      order = await Order.findOne({ 'shippingAddress.phone': phone.trim() }).lean()
         .populate('orderItems.productId')
         .sort({ createdAt: -1 })
         .lean();

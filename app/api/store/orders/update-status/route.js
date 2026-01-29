@@ -52,7 +52,7 @@ export async function POST(request) {
         await dbConnect();
 
         // Find and update order
-        const order = await Order.findById(orderId);
+        const order = await Order.findById(orderId).lean();
         if (!order) {
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         }

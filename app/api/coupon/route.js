@@ -48,7 +48,7 @@ export async function POST(request){
 
         // Check if for new users only
         if (coupon.forNewUser) {
-            const userOrders = await Order.find({ userId });
+            const userOrders = await Order.find({ userId }).lean();
             if (userOrders.length > 0) {
                 return NextResponse.json({ error: "Coupon valid for new users only" }, { status: 400 });
             }
@@ -57,8 +57,8 @@ export async function POST(request){
         // Check if for first order only
         if (coupon.firstOrderOnly) {
             const storeOrders = coupon.storeId
-                ? await Order.find({ userId, storeId: coupon.storeId })
-                : await Order.find({ userId });
+                ? await Order.find({ userId, storeId: coupon.storeId }).lean()
+                : await Order.find({ userId }).lean();
             if (storeOrders.length > 0) {
                 return NextResponse.json({ error: "Coupon valid for first order only" }, { status: 400 });
             }

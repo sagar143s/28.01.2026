@@ -25,7 +25,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const ticket = await Ticket.findById(ticketId);
+    const ticket = await Ticket.findById(ticketId).lean();
 
     if (!ticket) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
