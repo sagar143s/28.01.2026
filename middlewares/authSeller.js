@@ -16,8 +16,9 @@ const authSeller = async (userId) => {
         console.log('[authSeller] Owned store found:', ownedStore ? `Yes (${ownedStore._id})` : 'No');
         console.log('[authSeller] Owned store status:', ownedStore?.status);
         
-        if (ownedStore && ownedStore.status === 'approved') {
-            console.log('[authSeller] User owns approved store:', ownedStore._id);
+        if (ownedStore && ownedStore.status !== 'rejected') {
+            const status = ownedStore.status || 'missing';
+            console.log('[authSeller] User owns store with status:', status, ownedStore._id);
             return ownedStore._id.toString();
         }
         
