@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import StoreUser from "@/models/StoreUser";
+import Store from "@/models/Store";
 import admin from "firebase-admin";
 
 export async function POST(request) {
@@ -59,9 +60,18 @@ export async function POST(request) {
       return NextResponse.json({ error: "Failed to accept invitation" }, { status: 400 });
     }
 
+    // Also approve the Store for this user if it exists
+    if (invite.storeId) {
+      await Store.findByIdAndUpdate(
+        invite.storeId,
+        { status: "approved" },
+        { new: true }
+      );
+    }
+
     return NextResponse.json({
       message: updated.status === "approved"
-        ? "Invitation accepted. You already have access."
+        ? "Invitation accepted. You now have access to the store."
         : "Invitation accepted. Waiting for approval.",
       status: updated.status,
     });
