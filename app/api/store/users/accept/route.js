@@ -41,8 +41,12 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invitation has expired" }, { status: 410 });
     }
 
-    if (invite.email && userEmail && invite.email.toLowerCase() !== userEmail.toLowerCase()) {
-      return NextResponse.json({ error: "This invitation is for a different email address" }, { status: 403 });
+    // Only enforce email match if the invitation has an email specified
+    // If no email specified, allow any user to accept
+    // If email specified, only allow that exact email
+    if (invite.email && invite.email.toLowerCase() !== userEmail.toLowerCase()) {
+      console.log('[accept-invite] Email mismatch:', { inviteEmail: invite.email, userEmail, storeId: invite.storeId });
+      return NextResponse.json({ error: `This invitation is for ${invite.email}. You are signed in as ${userEmail}.` }, { status: 403 });
     }
 
     const updated = await StoreUser.findOneAndUpdate(
