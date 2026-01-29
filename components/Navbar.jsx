@@ -626,8 +626,8 @@ const Navbar = () => {
                 href="/wallet"
                 className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold hover:bg-amber-100 transition"
               >
-                <Image src={CoinIcon} alt="Coins" width={20} height={20} />
-                <span>{walletCoins} coins</span>
+                <Image src={CoinIcon} alt="Wallet" width={20} height={20} />
+                <span>Wallet: {walletCoins}</span>
               </Link>
             ) : (
               <button
@@ -638,8 +638,8 @@ const Navbar = () => {
                 }}
                 className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold hover:bg-amber-100 transition"
               >
-                <Image src={CoinIcon} alt="Coins" width={20} height={20} />
-                <span>0 coins</span>
+                <Image src={CoinIcon} alt="Wallet" width={20} height={20} />
+                <span>Wallet</span>
               </button>
             )}
             {/* Login/User Button */}
@@ -916,8 +916,8 @@ const Navbar = () => {
                   className="w-full px-4 py-3 bg-amber-50 text-amber-800 text-sm font-semibold rounded-full mb-4 flex items-center gap-2"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  <Image src={CoinIcon} alt="Coins" width={20} height={20} />
-                  <span>{walletCoins} coins</span>
+                  <Image src={CoinIcon} alt="Wallet" width={20} height={20} />
+                  <span>Wallet: {walletCoins}</span>
                 </Link>
               ) : (
                 <button
@@ -929,8 +929,8 @@ const Navbar = () => {
                   }}
                   className="w-full px-4 py-3 bg-amber-50 text-amber-800 text-sm font-semibold rounded-full mb-4 flex items-center gap-2"
                 >
-                  <Image src={CoinIcon} alt="Coins" width={20} height={20} />
-                  <span>0 coins</span>
+                  <Image src={CoinIcon} alt="Wallet" width={20} height={20} />
+                  <span>Wallet</span>
                 </button>
               )}
 
