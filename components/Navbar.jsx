@@ -15,6 +15,7 @@ import Logo from "../assets/logo/Asset 6.png";
 import LogoWhite from "../assets/logo/Asset 11.png";
 import LogoMobile from "../assets/logo/Asset 3.png";
 import Truck from '../assets/delivery.png';
+import CoinIcon from '../assets/common/coin.svg';
 import SignInModal from './SignInModal';
 
 const Navbar = () => {
@@ -63,6 +64,7 @@ const Navbar = () => {
   const [firebaseUser, setFirebaseUser] = useState(undefined);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [signOutContext, setSignOutContext] = useState('desktop');
+  const [walletCoins, setWalletCoins] = useState(0);
 
   // Show sign-in modal automatically on mobile for guest users
   useEffect(() => {
@@ -209,6 +211,29 @@ const Navbar = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  const fetchWalletCoins = async () => {
+    try {
+      if (!auth.currentUser) {
+        setWalletCoins(0);
+        return;
+      }
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/wallet', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWalletCoins(Number(data.coins || 0));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchWalletCoins();
+  }, [firebaseUser]);
 
   // Listen for custom event to open sign in modal
   useEffect(() => {
@@ -587,6 +612,15 @@ const Navbar = () => {
 
           {/* Right Side - Actions */}
           <div className="hidden lg:flex items-center gap-3 flex-shrink-0">
+            {firebaseUser && (
+              <Link
+                href="/wallet"
+                className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold hover:bg-amber-100 transition"
+              >
+                <Image src={CoinIcon} alt="Coins" width={20} height={20} />
+                <span>{walletCoins} coins</span>
+              </Link>
+            )}
             {/* Login/User Button */}
             {firebaseUser ? (
               <div
@@ -850,6 +884,17 @@ const Navbar = () => {
                   )}
                   <span className="font-medium">Hi, {firebaseUser.displayName || firebaseUser.email}</span>
                 </div>
+              )}
+
+              {firebaseUser && (
+                <Link
+                  href="/wallet"
+                  className="w-full px-4 py-3 bg-amber-50 text-amber-800 text-sm font-semibold rounded-full mb-4 flex items-center gap-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Image src={CoinIcon} alt="Coins" width={20} height={20} />
+                  <span>{walletCoins} coins</span>
+                </Link>
               )}
 
               {/* Links */}

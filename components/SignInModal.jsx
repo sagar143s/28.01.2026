@@ -55,6 +55,11 @@ const SignInModal = ({ open, onClose }) => {
       // Send appropriate email based on whether user is new or returning
       try {
         const token = await result.user.getIdToken();
+        if (isNewUser) {
+          await axios.post('/api/wallet/bonus', {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
         const emailEndpoint = isNewUser ? '/api/send-welcome-email' : '/api/send-login-email';
         axios.post(emailEndpoint, {
           email: result.user.email,
@@ -97,6 +102,15 @@ const SignInModal = ({ open, onClose }) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         if (name) {
           await updateProfile(userCredential.user, { displayName: name });
+        }
+
+        try {
+          const token = await userCredential.user.getIdToken();
+          await axios.post('/api/wallet/bonus', {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (err) {
+          console.warn('[wallet bonus] failed:', err?.response?.data || err.message);
         }
         
         // Check if welcome bonus was claimed from top bar

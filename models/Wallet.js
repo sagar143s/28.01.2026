@@ -11,7 +11,8 @@ const WalletTransactionSchema = new mongoose.Schema({
 const WalletSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true, index: true },
   coins: { type: Number, default: 0 },
-  transactions: { type: [WalletTransactionSchema], default: [] }
+  transactions: { type: [WalletTransactionSchema], default: [] },
+  welcomeBonusClaimed: { type: Boolean, default: false }
 }, { timestamps: true });
 
 export default mongoose.models.Wallet || mongoose.model("Wallet", WalletSchema);
