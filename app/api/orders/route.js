@@ -10,6 +10,7 @@ import Address from '@/models/Address';
 import Store from '@/models/Store';
 import Coupon from '@/models/Coupon';
 import GuestUser from '@/models/GuestUser';
+import Wallet from '@/models/Wallet';
 import { sendOrderConfirmationEmail } from '@/lib/email';
 import { fetchNormalizedDelhiveryTracking } from '@/lib/delhivery';
 
@@ -33,7 +34,7 @@ export async function POST(request) {
         console.log('ORDER API: Incoming request', { method: request.method, headers: headersObj, body });
 
         // Extract fields
-        const { addressId, addressData, items, couponCode, paymentMethod, isGuest, guestInfo } = body;
+        const { addressId, addressData, items, couponCode, paymentMethod, isGuest, guestInfo, coinsToRedeem } = body;
         let userId = null;
         let isPlusMember = false;
 
@@ -162,6 +163,19 @@ export async function POST(request) {
         let shippingFee = typeof body.shippingFee === 'number' ? body.shippingFee : 0;
         let isShippingFeeAdded = false;
 
+        // Wallet redemption (logged-in users only)
+        let redeemableCoins = 0;
+        let walletRedeemApplied = false;
+        let wallet = null;
+        if (userId && Number(coinsToRedeem) > 0) {
+            wallet = await Wallet.findOne({ userId });
+            if (!wallet) {
+                wallet = await Wallet.create({ userId, coins: 0 });
+            }
+            const availableCoins = Number(wallet.coins || 0);
+            redeemableCoins = Math.max(0, Math.min(Math.floor(Number(coinsToRedeem)), availableCoins));
+        }
+
         // Order creation
         let orderIds = [];
         let fullAmount = 0;
@@ -207,6 +221,18 @@ export async function POST(request) {
                 total += shippingFee;
                 isShippingFeeAdded = true;
             }
+
+            // Apply wallet discount once across the entire checkout
+            let coinsRedeemed = 0;
+            let walletDiscount = 0;
+            if (!walletRedeemApplied && redeemableCoins > 0) {
+                const maxCoinsByTotal = Math.floor(total / 0.5);
+                coinsRedeemed = Math.min(redeemableCoins, maxCoinsByTotal);
+                walletDiscount = Number((coinsRedeemed * 0.5).toFixed(2));
+                total = Math.max(0, Number((total - walletDiscount).toFixed(2)));
+                walletRedeemApplied = true;
+            }
+
             fullAmount += parseFloat(total.toFixed(2));
 
             // Prepare order data
@@ -217,6 +243,8 @@ export async function POST(request) {
                 paymentMethod,
                 isCouponUsed: !!coupon,
                 coupon: coupon || {},
+                coinsRedeemed,
+                walletDiscount,
                 orderItems: sellerItems.map(item => ({
                     productId: item.id,
                     quantity: item.quantity,
@@ -354,6 +382,18 @@ export async function POST(request) {
             console.log('ORDER API DEBUG: orderData before Order.create:', JSON.stringify(orderData, null, 2));
             
             const order = await Order.create(orderData);
+
+            // Deduct wallet coins once when applied
+            if (coinsRedeemed > 0 && userId) {
+                await Wallet.findOneAndUpdate(
+                    { userId },
+                    {
+                        $inc: { coins: -coinsRedeemed },
+                        $push: { transactions: { type: 'REDEEM', coins: coinsRedeemed, rupees: walletDiscount, orderId: order._id.toString() } }
+                    },
+                    { new: true }
+                );
+            }
             // Set shortOrderNumber (last 6 hex digits of ObjectId as decimal)
             const hex = order._id.toString().slice(-6);
             const shortOrderNumber = parseInt(hex, 16);

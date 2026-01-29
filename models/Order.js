@@ -36,6 +36,10 @@ const OrderSchema = new mongoose.Schema({
   cancelReason: String,
   returnReason: String,
   notes: String,
+  coinsRedeemed: { type: Number, default: 0 },
+  walletDiscount: { type: Number, default: 0 },
+  coinsEarned: { type: Number, default: 0 },
+  rewardsCredited: { type: Boolean, default: false },
   // Return & Replacement
   returns: [{
     itemIndex: Number,

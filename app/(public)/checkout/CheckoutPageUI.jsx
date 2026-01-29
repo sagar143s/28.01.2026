@@ -67,6 +67,11 @@ export default function CheckoutPage() {
   const [editingAddressId, setEditingAddressId] = useState(null);
   const [showAlternatePhone, setShowAlternatePhone] = useState(false);
 
+  // Wallet / Coins
+  const [walletInfo, setWalletInfo] = useState({ coins: 0, rupeesValue: 0 });
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [redeemCoins, setRedeemCoins] = useState(0);
+
   // Coupon logic
   const [coupon, setCoupon] = useState("");
   const [couponError, setCouponError] = useState("");
@@ -95,6 +100,33 @@ export default function CheckoutPage() {
       dispatch(fetchAddress({ getToken }));
     }
   }, [user, getToken, dispatch]);
+
+  // Fetch wallet balance for logged-in users
+  useEffect(() => {
+    const loadWallet = async () => {
+      if (!user || !getToken) {
+        setWalletInfo({ coins: 0, rupeesValue: 0 });
+        setRedeemCoins(0);
+        return;
+      }
+      try {
+        setWalletLoading(true);
+        const token = await getToken();
+        const res = await fetch('/api/wallet', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setWalletInfo({ coins: data.coins || 0, rupeesValue: data.rupeesValue || 0 });
+        }
+      } catch (e) {
+        // ignore wallet errors on checkout
+      } finally {
+        setWalletLoading(false);
+      }
+    };
+    loadWallet();
+  }, [user, getToken]);
 
   // Check if Razorpay is already loaded (in case script loaded before state update)
   useEffect(() => {
@@ -184,6 +216,10 @@ export default function CheckoutPage() {
 
   const subtotal = cartArray.reduce((sum, item) => sum + (item._cartPrice ?? item.price ?? 0) * item.quantity, 0);
   const total = subtotal + shipping;
+  const maxRedeemableCoins = Math.min(Math.floor(walletInfo.coins || 0), Math.floor(total / 0.5));
+  const safeRedeemCoins = Math.min(Math.floor(redeemCoins || 0), maxRedeemableCoins);
+  const walletDiscount = Number((safeRedeemCoins * 0.5).toFixed(2));
+  const totalAfterWallet = Math.max(0, Number((total - walletDiscount).toFixed(2)));
 
   // Load shipping settings - refetch on page load and when products change
   useEffect(() => {
@@ -266,7 +302,7 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: Math.round(total), // Ensure it's a whole number
+          amount: Math.round(totalAfterWallet), // Ensure it's a whole number
           currency: "INR",
           receipt: `order_${Date.now()}`,
         }),
@@ -290,7 +326,7 @@ export default function CheckoutPage() {
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         order_id: orderData.orderId, // Use the order ID from backend
-        amount: Math.round(total * 100), // Amount in paise
+        amount: Math.round(totalAfterWallet * 100), // Amount in paise
         currency: "INR",
         name: "QuickFynd",
         description: "Order Payment",
@@ -401,6 +437,9 @@ export default function CheckoutPage() {
           if (addressId) {
             payload.addressId = addressId;
           }
+          if (safeRedeemCoins > 0) {
+            payload.coinsToRedeem = safeRedeemCoins;
+          }
         } else {
           if (!form.name || !form.email || !form.phone || !form.street || !form.city || !form.state || !form.country) {
             setFormError("Please fill all required shipping details.");
@@ -475,6 +514,9 @@ export default function CheckoutPage() {
           paymentMethod: form.payment === 'cod' ? 'COD' : form.payment.toUpperCase(),
           shippingFee: shipping,
         };
+        if (safeRedeemCoins > 0) {
+          payload.coinsToRedeem = safeRedeemCoins;
+        }
         // Only add addressId if it exists
         if (addressId || (addressList[0] && addressList[0]._id)) {
           payload.addressId = addressId || addressList[0]._id;
@@ -536,7 +578,7 @@ export default function CheckoutPage() {
       if (data._id || data.id) {
         // Order created successfully - clear cart and show prepaid upsell before redirect
         const createdOrderId = data._id || data.id;
-        const orderTotal = data.total || total;
+        const orderTotal = data.total || totalAfterWallet;
         dispatch(clearCart());
         setUpsellOrderId(createdOrderId);
         setUpsellOrderTotal(orderTotal);
@@ -1206,12 +1248,49 @@ export default function CheckoutPage() {
             <span>Shipping &amp; handling</span>
             <span>{shipping > 0 ? `₹ ${shipping.toLocaleString()}` : '₹ 0'}</span>
           </div>
+          {user && (
+            <div className="mb-3 rounded-lg border border-purple-100 bg-purple-50 p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-purple-800">Wallet Coins</span>
+                <span className="text-purple-800">
+                  {walletLoading ? 'Loading...' : `${walletInfo.coins} coins`}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={maxRedeemableCoins}
+                  value={redeemCoins}
+                  onChange={(e) => setRedeemCoins(Math.max(0, Math.min(Number(e.target.value || 0), maxRedeemableCoins)))}
+                  className="w-28 rounded border border-purple-200 bg-white px-2 py-1 text-sm"
+                  placeholder="0"
+                />
+                <button
+                  type="button"
+                  onClick={() => setRedeemCoins(maxRedeemableCoins)}
+                  className="text-xs font-semibold text-purple-700 hover:underline"
+                >
+                  Use max
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-purple-700">
+                10 coins = ₹5. Max usable now: {maxRedeemableCoins} coins
+              </div>
+            </div>
+          )}
+          {safeRedeemCoins > 0 && (
+            <div className="flex justify-between text-sm text-purple-800 mb-2">
+              <span>Wallet discount</span>
+              <span>-₹ {walletDiscount.toLocaleString()}</span>
+            </div>
+          )}
           <hr className="my-2" />
           
           {/* Total - Desktop Only */}
           <div className="hidden md:flex justify-between font-bold text-base text-gray-900 mb-4">
             <span>Total</span>
-            <span>₹ {total.toLocaleString()}</span>
+            <span>₹ {totalAfterWallet.toLocaleString()}</span>
           </div>
           
           {/* Place Order Button - Desktop Only */}
@@ -1248,7 +1327,7 @@ export default function CheckoutPage() {
           {/* Total - Sticky on Mobile */}
           <div className="flex justify-between font-bold text-base text-gray-900 mb-4">
             <span>Total</span>
-            <span>₹ {total.toLocaleString()}</span>
+            <span>₹ {totalAfterWallet.toLocaleString()}</span>
           </div>
           
           {/* Address validation message */}

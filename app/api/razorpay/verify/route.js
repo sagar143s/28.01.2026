@@ -81,6 +81,10 @@ export async function POST(request) {
         razorpayOrderId: razorpay_order_id,
       };
 
+      if (paymentPayload.coinsToRedeem) {
+        orderPayload.coinsToRedeem = paymentPayload.coinsToRedeem;
+      }
+
       // Add user/guest info
       if (paymentPayload.token) {
         // Logged-in user

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Order from '@/models/Order';
+import Wallet from '@/models/Wallet';
 import authSeller from '@/middlewares/authSeller';
 import { getAuth } from '@/lib/firebase-admin';
 
@@ -52,7 +53,7 @@ export async function POST(request) {
         await dbConnect();
 
         // Find and update order
-        const order = await Order.findById(orderId).lean();
+        const order = await Order.findById(orderId);
         if (!order) {
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         }
@@ -75,6 +76,27 @@ export async function POST(request) {
 
         // Update order status
         order.status = status;
+
+        const normalizedStatus = String(status || '').toUpperCase();
+        if (normalizedStatus === 'DELIVERED' && order.userId && !order.rewardsCredited) {
+            const orderTotal = Number(order.total || 0);
+            const coinsEarned = Math.floor(orderTotal / 10);
+
+            if (coinsEarned > 0) {
+                await Wallet.findOneAndUpdate(
+                    { userId: order.userId },
+                    {
+                        $inc: { coins: coinsEarned },
+                        $push: { transactions: { type: 'EARN', coins: coinsEarned, rupees: Number((coinsEarned * 0.5).toFixed(2)), orderId: order._id.toString() } }
+                    },
+                    { upsert: true, new: true }
+                );
+            }
+
+            order.coinsEarned = coinsEarned;
+            order.rewardsCredited = true;
+        }
+
         await order.save();
 
         // Send status update email
