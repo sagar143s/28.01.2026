@@ -612,7 +612,7 @@ const Navbar = () => {
 
           {/* Right Side - Actions */}
           <div className="hidden lg:flex items-center gap-3 flex-shrink-0">
-            {firebaseUser && (
+            {firebaseUser ? (
               <Link
                 href="/wallet"
                 className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold hover:bg-amber-100 transition"
@@ -620,6 +620,15 @@ const Navbar = () => {
                 <Image src={CoinIcon} alt="Coins" width={20} height={20} />
                 <span>{walletCoins} coins</span>
               </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSignInOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold hover:bg-amber-100 transition"
+              >
+                <Image src={CoinIcon} alt="Coins" width={20} height={20} />
+                <span>0 coins</span>
+              </button>
             )}
             {/* Login/User Button */}
             {firebaseUser ? (
@@ -886,7 +895,7 @@ const Navbar = () => {
                 </div>
               )}
 
-              {firebaseUser && (
+              {firebaseUser ? (
                 <Link
                   href="/wallet"
                   className="w-full px-4 py-3 bg-amber-50 text-amber-800 text-sm font-semibold rounded-full mb-4 flex items-center gap-2"
@@ -895,6 +904,18 @@ const Navbar = () => {
                   <Image src={CoinIcon} alt="Coins" width={20} height={20} />
                   <span>{walletCoins} coins</span>
                 </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignInOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full px-4 py-3 bg-amber-50 text-amber-800 text-sm font-semibold rounded-full mb-4 flex items-center gap-2"
+                >
+                  <Image src={CoinIcon} alt="Coins" width={20} height={20} />
+                  <span>0 coins</span>
+                </button>
               )}
 
               {/* Links */}
