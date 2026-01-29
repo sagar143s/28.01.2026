@@ -8,7 +8,7 @@ import Imageslider from '../assets/signin/76.webp';
 import axios from 'axios';
 import { countryCodes } from '../assets/countryCodes';
 
-const SignInModal = ({ open, onClose }) => {
+const SignInModal = ({ open, onClose, defaultMode = 'login', bonusMessage = '' }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -28,6 +28,12 @@ const SignInModal = ({ open, onClose }) => {
     }, 10);
     return () => clearInterval(interval);
   }, []);
+
+  React.useEffect(() => {
+    if (open) {
+      setIsRegister(defaultMode === 'register');
+    }
+  }, [open, defaultMode]);
 
   if (!open) return null;
 
@@ -241,6 +247,12 @@ const SignInModal = ({ open, onClose }) => {
 
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-1">Hala! Let's get started</h2>
           <p className="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4">Create account or sign in to your account</p>
+
+          {bonusMessage && isRegister && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {bonusMessage}
+            </div>
+          )}
 
           {/* Tab Buttons */}
           <div className="flex gap-2 sm:gap-3 mb-3 sm:mb-4">

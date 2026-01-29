@@ -61,6 +61,7 @@ const Navbar = () => {
   const [wishlistCount, setWishlistCount] = useState(0);
   const cartCount = useSelector((state) => state.cart.total);
   const [signInOpen, setSignInOpen] = useState(false);
+  const [signInMode, setSignInMode] = useState('login');
   const [firebaseUser, setFirebaseUser] = useState(undefined);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [signOutContext, setSignOutContext] = useState('desktop');
@@ -237,7 +238,9 @@ const Navbar = () => {
 
   // Listen for custom event to open sign in modal
   useEffect(() => {
-    const handleOpenSignInModal = () => {
+    const handleOpenSignInModal = (event) => {
+      const mode = event?.detail?.mode || 'login';
+      setSignInMode(mode);
       setSignInOpen(true);
     };
     window.addEventListener('openSignInModal', handleOpenSignInModal);
@@ -623,7 +626,10 @@ const Navbar = () => {
             ) : (
               <button
                 type="button"
-                onClick={() => setSignInOpen(true)}
+                onClick={() => {
+                  setSignInMode('register');
+                  setSignInOpen(true);
+                }}
                 className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-semibold hover:bg-amber-100 transition"
               >
                 <Image src={CoinIcon} alt="Coins" width={20} height={20} />
@@ -726,7 +732,10 @@ const Navbar = () => {
             ) : (
               <button
                 type="button"
-                onClick={() => setSignInOpen(true)}
+                onClick={() => {
+                  setSignInMode('login');
+                  setSignInOpen(true);
+                }}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 transition text-white text-sm font-medium rounded-full"
               >
                 Login
@@ -908,6 +917,7 @@ const Navbar = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    setSignInMode('register');
                     setSignInOpen(true);
                     setMobileMenuOpen(false);
                   }}
@@ -1115,7 +1125,14 @@ const Navbar = () => {
 
 
       {/* Sign In Modal (always at Navbar root) */}
-      {!firebaseUser && <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />}
+      {!firebaseUser && (
+        <SignInModal
+          open={signInOpen}
+          onClose={() => setSignInOpen(false)}
+          defaultMode={signInMode}
+          bonusMessage="Register now and get 50 coins free bonus!"
+        />
+      )}
     </div>
   </nav>
     </>
