@@ -421,6 +421,9 @@ export default function CheckoutPage() {
   const safeRedeemCoins = Math.min(Math.floor(redeemCoins || 0), maxRedeemableCoins);
   const walletDiscount = Number((safeRedeemCoins * 1).toFixed(2));
   const totalAfterWallet = Math.max(0, Number((total - walletDiscount).toFixed(2)));
+  const walletBalance = walletInfo?.rupeesValue ? Number(walletInfo.rupeesValue) : Number(walletInfo?.coins || 0);
+  const walletCanCoverTotal = walletBalance >= Math.ceil(total);
+  const walletCanUse = user && walletBalance > 0;
 
   // Load shipping settings - refetch on page load and when products change
   useEffect(() => {
@@ -1360,126 +1363,131 @@ export default function CheckoutPage() {
               ))}
               <h2 className="text-xl font-bold mb-3 mt-4 text-gray-900">Payment methods</h2>
               
-              {/* Payment Methods - Show if wallet doesn't cover full amount */}
-              {safeRedeemCoins < total && (
-                <>
-                  {safeRedeemCoins > 0 && (
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2 px-1">
-                      Pay remaining ₹ {(total - walletDiscount).toLocaleString()} with:
-                    </h3>
+              {/* Wallet Apply Checkbox */}
+              <label className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all mb-3 ${
+                walletCanUse
+                  ? 'cursor-pointer border-green-200 hover:border-green-400 hover:bg-green-50/30'
+                  : 'opacity-60 cursor-not-allowed border-gray-200 bg-gray-50'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={safeRedeemCoins > 0}
+                  onChange={(e) => {
+                    if (!user) {
+                      setShowSignIn(true);
+                      return;
+                    }
+                    if (!walletCanUse) return;
+                    if (e.target.checked) {
+                      setRedeemCoins(String(Math.min(Math.ceil(total), walletBalance)));
+                    } else {
+                      setRedeemCoins('');
+                    }
+                  }}
+                  disabled={!walletCanUse}
+                  className="accent-green-600 w-5 h-5"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+                    </svg>
+                    <div>
+                      <span className="font-semibold text-gray-900">Use Wallet</span>
+                      <div className="text-xs text-gray-600">
+                        {user ? `Balance ₹ ${walletBalance.toLocaleString()}` : 'Sign in to view wallet'}
+                      </div>
+                    </div>
+                  </div>
+                  {!user && (
+                    <span className="text-xs text-blue-600 ml-7">Sign in to use wallet</span>
                   )}
+                  {user && walletBalance <= 0 && (
+                    <span className="text-xs text-gray-500 ml-7">Wallet balance is ₹ 0</span>
+                  )}
+                  {user && walletBalance > 0 && !walletCanCoverTotal && (
+                    <span className="text-xs text-gray-500 ml-7">Will apply wallet and pay remaining with another method</span>
+                  )}
+                </div>
+              </label>
+
+              {safeRedeemCoins > 0 && safeRedeemCoins < total && (
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-1">
+                  Pay remaining ₹ {(total - walletDiscount).toLocaleString()} with:
+                </h3>
+              )}
+
+              <div className="flex flex-col gap-2 mb-4">
+                {/* Credit Card Option */}
+                <label className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer transition-all hover:border-blue-400 hover:bg-blue-50/30 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="card"
+                    checked={form.payment === 'card'}
+                    onChange={handleChange}
+                    className="accent-blue-600 w-5 h-5"
+                  />
+                  <div className="flex-1 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
+                        <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd"/>
+                      </svg>
+                      <div>
+                        <span className="font-semibold text-gray-900">Credit / Debit Card</span>
+                        <div className="text-xs text-gray-600">Visa, Mastercard, Amex</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Image src={Creditimage4} alt="Visa" width={24} height={16} className="object-contain"/>
+                      <Image src={Creditimage3} alt="Mastercard" width={24} height={16} className="object-contain"/>
+                      <Image src={Creditimage2} alt="Card" width={24} height={16} className="object-contain"/>
+                      <Image src={Creditimage1} alt="Card" width={24} height={16} className="object-contain"/>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Cash on Delivery Option */}
+                {(() => {
+                  const maxCODAmount = shippingSetting?.maxCODAmount || 0;
+                  const remainingAmount = total - walletDiscount;
+                  const isCODDisabled = shippingSetting?.enableCOD === false || 
+                    (maxCODAmount > 0 && remainingAmount > maxCODAmount);
                   
-                  <div className="flex flex-col gap-2 mb-4">
-                    {/* Credit Card Option */}
-                    <label className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer transition-all hover:border-blue-400 hover:bg-blue-50/30 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                  return (
+                    <label className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
+                      isCODDisabled 
+                        ? 'opacity-50 cursor-not-allowed border-gray-300 bg-gray-50' 
+                        : 'cursor-pointer border-gray-200 hover:border-green-400 hover:bg-green-50/30 has-[:checked]:border-green-500 has-[:checked]:bg-green-50'
+                    }`}>
                       <input
                         type="radio"
                         name="payment"
-                        value="card"
-                        checked={form.payment === 'card'}
+                        value="cod"
+                        checked={form.payment === 'cod' && !isCODDisabled}
                         onChange={handleChange}
-                        className="accent-blue-600 w-5 h-5"
+                        disabled={isCODDisabled}
+                        className="accent-green-600 w-5 h-5"
                       />
-                      <div className="flex-1 flex items-center justify-between">
+                      <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
-                            <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd"/>
+                          <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/>
                           </svg>
                           <div>
-                            <span className="font-semibold text-gray-900">Credit / Debit Card</span>
-                            <div className="text-xs text-gray-600">Visa, Mastercard, Amex</div>
+                            <span className="font-semibold text-gray-900">Cash on Delivery</span>
+                            <div className="text-xs text-gray-600">Pay when you receive</div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Image src={Creditimage4} alt="Visa" width={24} height={16} className="object-contain"/>
-                          <Image src={Creditimage3} alt="Mastercard" width={24} height={16} className="object-contain"/>
-                          <Image src={Creditimage2} alt="Card" width={24} height={16} className="object-contain"/>
-                          <Image src={Creditimage1} alt="Card" width={24} height={16} className="object-contain"/>
-                        </div>
+                        {isCODDisabled && maxCODAmount > 0 && remainingAmount > maxCODAmount && (
+                          <span className="text-xs text-red-600 ml-8">Max limit ₹{maxCODAmount}</span>
+                        )}
                       </div>
                     </label>
-
-                    {/* Cash on Delivery Option */}
-                    {(() => {
-                      const maxCODAmount = shippingSetting?.maxCODAmount || 0;
-                      const remainingAmount = total - walletDiscount;
-                      const isCODDisabled = shippingSetting?.enableCOD === false || 
-                        (maxCODAmount > 0 && remainingAmount > maxCODAmount);
-                      
-                      return (
-                        <label className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
-                          isCODDisabled 
-                            ? 'opacity-50 cursor-not-allowed border-gray-300 bg-gray-50' 
-                            : 'cursor-pointer border-gray-200 hover:border-green-400 hover:bg-green-50/30 has-[:checked]:border-green-500 has-[:checked]:bg-green-50'
-                        }`}>
-                          <input
-                            type="radio"
-                            name="payment"
-                            value="cod"
-                            checked={form.payment === 'cod' && !isCODDisabled}
-                            onChange={handleChange}
-                            disabled={isCODDisabled}
-                            className="accent-green-600 w-5 h-5"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/>
-                              </svg>
-                              <div>
-                                <span className="font-semibold text-gray-900">Cash on Delivery</span>
-                                <div className="text-xs text-gray-600">Pay when you receive</div>
-                              </div>
-                            </div>
-                            {isCODDisabled && maxCODAmount > 0 && remainingAmount > maxCODAmount && (
-                              <span className="text-xs text-red-600 ml-8">Max limit ₹{maxCODAmount}</span>
-                            )}
-                          </div>
-                        </label>
-                      );
-                    })()}
-                  </div>
-                </>
-              )}
-
-              {/* Wallet Checkbox - Optional - Now at bottom */}
-              {user && walletInfo.coins > 0 && (
-                <div className="p-4 bg-green-50 border-2 border-green-300 rounded-lg">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={safeRedeemCoins > 0}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setRedeemCoins(String(walletInfo.coins || 0));
-                        } else {
-                          setRedeemCoins('');
-                        }
-                      }}
-                      className="accent-green-600 w-5 h-5"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-                        </svg>
-                        <span className="font-bold text-gray-900">Use Wallet Coins</span>
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-lg font-bold text-green-600">₹ {((walletInfo.coins || 0) * 1).toLocaleString()}</span>
-                        <span className="text-xs text-gray-600">available</span>
-                      </div>
-                      {safeRedeemCoins > 0 && walletDiscount < total && (
-                        <span className="text-xs text-blue-600 mt-1 block">Remaining: ₹ {(total - walletDiscount).toLocaleString()} to pay</span>
-                      )}
-                      {safeRedeemCoins >= total && (
-                        <span className="text-xs text-green-600 mt-1 block font-semibold">✓ Full amount covered!</span>
-                      )}
-                    </div>
-                  </label>
-                </div>
-              )}
+                  );
+                })()}
+              </div>
               
               {!user && (
                 <div className="mt-4 text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -1694,6 +1702,8 @@ export default function CheckoutPage() {
                   ? 'bg-green-600 hover:bg-green-700' 
                   : form.payment === 'card'
                     ? 'bg-blue-600 hover:bg-blue-700'
+                    : form.payment === 'wallet'
+                      ? 'bg-green-600 hover:bg-green-700'
                     : 'bg-red-600 hover:bg-red-700'
             } ${placingOrder ? 'animate-bounce' : ''}`}
             disabled={(!form.addressId && !(form.name && form.phone && form.pincode && form.city && form.state && form.street)) || placingOrder}
@@ -1767,8 +1777,8 @@ export default function CheckoutPage() {
 
       {/* Coupon Modal */}
       {showCouponModal && (
-        <div className="fixed inset-0 bg-white/10 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowCouponModal(false)}>
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowCouponModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
               <h3 className="text-xl font-bold text-gray-900">Apply Coupon</h3>
@@ -1780,8 +1790,8 @@ export default function CheckoutPage() {
             </div>
 
             {/* Coupon Input */}
-            <div className="p-6 border-b border-gray-200">
-              <form onSubmit={handleApplyCoupon} className="flex gap-2">
+            <div className="p-4 sm:p-6 border-b border-gray-200">
+              <form onSubmit={handleApplyCoupon} className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   className="border border-gray-300 rounded-lg px-4 py-3 flex-1 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
@@ -1791,7 +1801,7 @@ export default function CheckoutPage() {
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition whitespace-nowrap"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition whitespace-nowrap w-full sm:w-auto"
                 >
                   Apply
                 </button>
@@ -1800,7 +1810,7 @@ export default function CheckoutPage() {
             </div>
 
             {/* Available Coupons */}
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <h4 className="font-semibold text-gray-900 mb-4">Available Coupons</h4>
               
               {availableCoupons.length === 0 ? (
@@ -1865,7 +1875,7 @@ export default function CheckoutPage() {
                       key={cpn._id}
                       className={`border border-dashed rounded-lg p-4 mb-3 transition ${
                         isEligible 
-                          ? 'border-gray-300 hover:border-blue-400 cursor-pointer hover:bg-blue-50' 
+                          ? 'border-green-200 bg-green-50 hover:border-green-300 cursor-pointer hover:bg-green-100' 
                           : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-75'
                       }`}
                       onClick={async () => { 
@@ -1904,7 +1914,7 @@ export default function CheckoutPage() {
                       }}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2 flex-1">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
                           <div className={`${badgeClass} font-bold text-xs px-2 py-1 rounded`}>
                             {cpn.code}
                           </div>
@@ -1913,7 +1923,7 @@ export default function CheckoutPage() {
                             {!isEligible && <span className="text-xs text-red-600 font-medium">{ineligibleReason}</span>}
                           </div>
                         </div>
-                        {isEligible && <button className="text-blue-600 text-xs font-semibold ml-2 whitespace-nowrap">APPLY</button>}
+                        {isEligible && <button className="text-green-700 text-xs font-semibold ml-2 whitespace-nowrap">APPLY</button>}
                       </div>
                       <p className="text-xs text-gray-600">{cpn.description}</p>
                     </div>

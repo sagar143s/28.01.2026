@@ -11,7 +11,7 @@ export default function CustomerLocationAnalytics() {
   const [locations, setLocations] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, today, week, month
+  const [filter, setFilter] = useState('all'); 
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function CustomerLocationAnalytics() {
 
       {/* Location Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* By Country */}
+      
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-800">Visits by Country</h3>
           <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -161,7 +161,7 @@ export default function CustomerLocationAnalytics() {
         </div>
       </div>
 
-      {/* Recent Visits Table */}
+      
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-gray-800">Recent Customer Visits</h3>
         <div className="overflow-x-auto">

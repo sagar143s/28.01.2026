@@ -1,7 +1,7 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Mail, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Mail, AlertCircle, CheckCircle, Clock, Users } from 'lucide-react';
 import { useAuth } from '@/lib/useAuth';
 import Loading from '@/components/Loading';
 
@@ -13,10 +13,32 @@ export default function PromotionalEmailsDashboardPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [selectedCustomers, setSelectedCustomers] = useState([]);
+  const [selectAllCustomers, setSelectAllCustomers] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState('');
 
   useEffect(() => {
     loadHistory(page);
   }, [page, statusFilter]);
+
+  useEffect(() => {
+    loadTemplates();
+    loadCustomers();
+  }, []);
+
+  useEffect(() => {
+    if (!customers.length) {
+      setSelectAllCustomers(false);
+      return;
+    }
+    setSelectAllCustomers(selectedCustomers.length === customers.length);
+  }, [customers.length, selectedCustomers.length]);
 
   const loadHistory = async (pageNumber = 1) => {
     try {
@@ -39,6 +61,95 @@ export default function PromotionalEmailsDashboardPage() {
       console.error('Error loading promotional email history:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTemplates = async () => {
+    try {
+      setTemplatesLoading(true);
+      const { data } = await axios.get('/api/promotional-emails/templates');
+      setTemplates(data.templates || []);
+      if (!selectedTemplateId && data.templates?.length) {
+        setSelectedTemplateId(data.templates[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const loadCustomers = async () => {
+    try {
+      setCustomersLoading(true);
+      const token = await getToken();
+      const { data } = await axios.get('/api/store/customers', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const withEmail = (data.customers || [])
+        .filter(c => c.email)
+        .map(c => ({
+          id: c._id || c.id || c.email,
+          name: c.name || 'Customer',
+          email: c.email,
+        }));
+      const unique = Array.from(new Map(withEmail.map(c => [c.email, c])).values());
+      setCustomers(unique);
+    } catch (error) {
+      console.error('Error loading customers:', error);
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
+
+  const toggleCustomer = (customerId) => {
+    setSelectedCustomers(prev =>
+      prev.includes(customerId)
+        ? prev.filter(id => id !== customerId)
+        : [...prev, customerId]
+    );
+  };
+
+  const handleSelectAll = (checked) => {
+    setSelectAllCustomers(checked);
+    if (checked) {
+      setSelectedCustomers(customers.map(c => c.id));
+    } else {
+      setSelectedCustomers([]);
+    }
+  };
+
+  const selectedEmails = useMemo(() => {
+    const selected = selectAllCustomers
+      ? customers
+      : customers.filter(c => selectedCustomers.includes(c.id));
+    return selected.map(c => c.email);
+  }, [customers, selectAllCustomers, selectedCustomers]);
+
+  const handleSendPromotional = async () => {
+    if (!selectedTemplateId) {
+      setSendStatus('Please select a template.');
+      return;
+    }
+    if (selectedEmails.length === 0) {
+      setSendStatus('Please select at least one customer.');
+      return;
+    }
+    try {
+      setSending(true);
+      setSendStatus('');
+      await axios.post('/api/promotional-emails', {
+        templateId: selectedTemplateId,
+        customerEmails: selectedEmails,
+        limit: selectedEmails.length,
+      });
+      setSendStatus(`Sent to ${selectedEmails.length} customer(s).`);
+      loadHistory(1);
+    } catch (error) {
+      const msg = error?.response?.data?.error || error?.response?.data?.message || error.message;
+      setSendStatus(msg || 'Failed to send promotional emails.');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -80,6 +191,99 @@ export default function PromotionalEmailsDashboardPage() {
         <StatCard icon={AlertCircle} title="Failed" value={stats.failed} color="red" />
         <StatCard icon={Clock} title="Pending" value={stats.pending} color="orange" />
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <Mail className="w-5 h-5" /> Templates
+          </h3>
+          {templatesLoading ? (
+            <div className="text-sm text-gray-500">Loading templates...</div>
+          ) : (
+            <>
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.subject}</option>
+                ))}
+              </select>
+              {selectedTemplateId && (
+                <div className="mt-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  {templates
+                    .filter(t => t.id === selectedTemplateId)
+                    .map(t => (
+                      <div key={t.id}>
+                        <div className="text-sm font-semibold text-gray-900">{t.title}</div>
+                        <div className="text-xs text-gray-600 mt-1">{t.content}</div>
+                        <div className="text-xs text-gray-500 mt-2">CTA: {t.cta}</div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <Users className="w-5 h-5" /> Customers
+          </h3>
+          {customersLoading ? (
+            <div className="text-sm text-gray-500">Loading customers...</div>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectAllCustomers}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Select All ({customers.length})
+                </span>
+              </label>
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {customers.map((customer) => (
+                  <label key={customer.id} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCustomers.includes(customer.id)}
+                      onChange={() => toggleCustomer(customer.id)}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                    <div>
+                      <div className="text-sm text-gray-900 font-medium">{customer.name}</div>
+                      <div className="text-xs text-gray-500">{customer.email}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-gray-200 rounded-lg p-4 bg-gray-50">
+        <div className="text-sm text-gray-700">
+          Send to {selectedEmails.length} customer(s)
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSendPromotional}
+            disabled={sending}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+          >
+            {sending ? 'Sending...' : 'Send Promotional Email'}
+          </button>
+        </div>
+      </div>
+      {sendStatus && (
+        <div className="text-sm text-gray-700">{sendStatus}</div>
+      )}
 
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-gray-800">Email History</h3>
