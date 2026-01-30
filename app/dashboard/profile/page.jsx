@@ -100,13 +100,13 @@ export default function DashboardProfilePage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
                 {/* Edit-only section */}
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                  <h2 className="text-lg font-semibold text-slate-800 mb-3">Edit Profile</h2>
-                  <p className="text-slate-600 mb-4 text-sm">Only editable fields appear below.</p>
-                  <p className="text-slate-600 mb-4 text-sm">Click "Edit" above to modify your name or photo.</p>
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+                  <h2 className="text-lg font-semibold text-slate-800 mb-2">Edit Profile</h2>
+                  <p className="text-slate-600 mb-2 text-xs">Only editable fields appear below.</p>
+                  <p className="text-slate-600 mb-3 text-xs">Click "Edit" above to modify your name or photo.</p>
                   {isEditing && (
                     <form
-                      className="flex flex-col gap-3"
+                      className="flex flex-col gap-2"
                       onSubmit={async (e) => {
                         e.preventDefault()
                         const formData = new FormData(e.currentTarget)
@@ -122,14 +122,14 @@ export default function DashboardProfilePage() {
                         }
                       }}
                     >
-                      <label className="text-sm text-slate-700">Display Name</label>
+                      <label className="text-xs text-slate-700 font-medium">Display Name</label>
                       <input
                         name="displayName"
                         defaultValue={user.displayName || ''}
-                        className="border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                         placeholder="Your name"
                       />
-                      <label className="text-sm text-slate-700 mt-2">Profile Photo</label>
+                      <label className="text-xs text-slate-700 font-medium mt-1">Profile Photo</label>
                       <div className="flex items-center gap-3">
                         {user.photoURL && (
                           <Image src={user.photoURL} alt="Current photo" width={50} height={50} className="rounded-full object-cover" />
@@ -175,48 +175,48 @@ export default function DashboardProfilePage() {
                           className="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer disabled:opacity-50"
                         />
                       </div>
-                      {uploading && <p className="text-sm text-blue-600">Uploading...</p>}
+                      {uploading && <p className="text-xs text-blue-600">Uploading...</p>}
                       <input type="hidden" name="photoURL" value={user.photoURL || ''} />
-                      <div className="flex gap-3 mt-3">
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save</button>
-                        <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300">Cancel</button>
+                      <div className="flex gap-2 mt-2">
+                        <button type="submit" className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save</button>
+                        <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-sm bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300">Cancel</button>
                       </div>
                     </form>
                   )}
                 </div>
 
                 {/* Saved addresses */}
-                <div id="addresses" className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-4">
+                <div id="addresses" className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 max-h-96 flex flex-col">
+                  <div className="flex items-center justify-between mb-3">
                     <h2 className="text-lg font-semibold text-slate-800">Saved Addresses</h2>
-                    <button onClick={() => { setAddrToEdit(null); setShowAddrModal(true) }} className="text-sm text-blue-600 hover:underline font-medium">Add New</button>
+                    <button onClick={() => { setAddrToEdit(null); setShowAddrModal(true) }} className="text-xs text-blue-600 hover:underline font-medium">Add New</button>
                   </div>
                   {addrLoading ? (
-                    <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center justify-center py-3">
                       <Loading />
                     </div>
                   ) : addresses.length === 0 ? (
-                    <div className="flex items-center justify-center py-12">
-                      <p className="text-slate-500 text-center">No saved addresses yet.<br/><span className="text-sm">Click "Add New" to create one.</span></p>
+                    <div className="flex items-center justify-center py-4">
+                      <p className="text-slate-500 text-center text-sm">No saved addresses yet.<br/><span className="text-xs">Click "Add New" to create one.</span></p>
                     </div>
                   ) : (
-                    <ul className="space-y-3 overflow-y-auto max-h-96">
+                    <ul className="space-y-2 overflow-y-auto flex-1">
                       {addresses.map((a) => (
-                        <li key={a.id || a._id} className="border border-slate-200 rounded-lg p-4 text-sm text-slate-700 hover:border-slate-300 transition">
-                          <div className="flex items-start justify-between gap-3">
+                        <li key={a.id || a._id} className="border border-slate-200 rounded-lg p-3 text-xs text-slate-700 hover:border-slate-300 transition">
+                          <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <div className="font-semibold text-slate-900 mb-1">{a.name || a.fullName || 'Address'}</div>
-                              <div className="text-slate-600">{[a.street, a.city, a.state, a.zip]?.filter(Boolean).join(', ')}</div>
-                              <div className="text-slate-500 mt-1">{a.country || 'India'}</div>
-                              {a.phone && <div className="text-slate-500 mt-1">Phone: {a.phone}</div>}
+                              <div className="font-semibold text-slate-900 mb-0.5">{a.name || a.fullName || 'Address'}</div>
+                              <div className="text-slate-600 text-xs">{[a.street, a.city, a.state, a.zip]?.filter(Boolean).join(', ')}</div>
+                              <div className="text-slate-500 text-xs mt-0.5">{a.country || 'India'}</div>
+                              {a.phone && <div className="text-slate-500 text-xs mt-0.5">Phone: {a.phone}</div>}
                             </div>
-                            <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex flex-col sm:flex-row gap-1">
                               <button
-                                className="px-3 py-1.5 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap"
+                                className="px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap"
                                 onClick={() => { setAddrToEdit(a); setShowAddrModal(true) }}
                               >Edit</button>
                               <button
-                                className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 whitespace-nowrap"
+                                className="px-2 py-1 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 whitespace-nowrap"
                                 onClick={async () => {
                                   if (!confirm('Delete this address?')) return
                                   try {
