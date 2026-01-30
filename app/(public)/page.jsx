@@ -3,6 +3,7 @@ import { useSelector } from "react-redux";
 import { useMemo, useEffect, useState, lazy, Suspense } from "react";
 import dynamic from "next/dynamic";
 import axios from "axios";
+import { useLocationTracking } from "@/lib/useLocationTracking";
 
 // Critical above-the-fold components - load immediately
 import Hero from "@/components/Hero";
@@ -24,6 +25,9 @@ export default function Home() {
     const [adminSections, setAdminSections] = useState([]);
     const [gridSections, setGridSections] = useState([]);
     const [section4Data, setSection4Data] = useState([]);
+
+    // Track customer location
+    useLocationTracking();
 
     useEffect(() => {
         const fetchData = async () => {
