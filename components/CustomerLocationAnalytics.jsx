@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { MapPinIcon, GlobeIcon, DevicePhoneIcon, Clock } from 'lucide-react';
+import { MapPinIcon, GlobeIcon, Smartphone, Clock } from 'lucide-react';
 import { useAuth } from '@/lib/useAuth';
 import CustomerLocationMap from './CustomerLocationMap';
 import LocationCharts from './LocationCharts';
@@ -15,6 +15,11 @@ export default function CustomerLocationAnalytics() {
 
   useEffect(() => {
     fetchLocationData();
+    const intervalId = setInterval(() => {
+      fetchLocationData();
+    }, 30000);
+
+    return () => clearInterval(intervalId);
   }, [filter]);
 
   const fetchLocationData = async () => {
@@ -87,7 +92,7 @@ export default function CustomerLocationAnalytics() {
           color="green"
         />
         <SummaryCard
-          icon={DevicePhoneIcon}
+          icon={Smartphone}
           title="Top Device"
           value={summary?.topDevice || 'N/A'}
           subtitle={`${summary?.deviceCount || 0} visits`}

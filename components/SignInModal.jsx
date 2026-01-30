@@ -42,6 +42,21 @@ const SignInModal = ({ open, onClose, defaultMode = 'login', bonusMessage = '' }
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
+  const trackLoginLocation = async (token) => {
+    try {
+      const pageUrl = typeof window !== 'undefined' ? window.location.pathname : '/';
+      await axios.post('/api/users/track-location', {
+        pageUrl
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      // Non-blocking
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     console.log('Google sign-in clicked');
     setError('');
@@ -61,6 +76,7 @@ const SignInModal = ({ open, onClose, defaultMode = 'login', bonusMessage = '' }
       // Send appropriate email based on whether user is new or returning
       try {
         const token = await result.user.getIdToken();
+        await trackLoginLocation(token);
         if (isNewUser) {
           await axios.post('/api/wallet/bonus', {}, {
             headers: { Authorization: `Bearer ${token}` }
@@ -112,6 +128,7 @@ const SignInModal = ({ open, onClose, defaultMode = 'login', bonusMessage = '' }
 
         try {
           const token = await userCredential.user.getIdToken();
+          await trackLoginLocation(token);
           await axios.post('/api/wallet/bonus', {}, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -148,6 +165,7 @@ const SignInModal = ({ open, onClose, defaultMode = 'login', bonusMessage = '' }
         // Send login notification email in background
         try {
           const token = await userCredential.user.getIdToken();
+          await trackLoginLocation(token);
           axios.post('/api/send-login-email', {
             email: email,
             name: userCredential.user.displayName || name || 'Customer'

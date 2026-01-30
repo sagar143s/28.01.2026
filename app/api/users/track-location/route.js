@@ -23,6 +23,13 @@ export async function POST(request) {
       }
     }
 
+    const rawForwardedIp = request.headers.get("x-forwarded-for");
+    const rawRealIp = request.headers.get("x-real-ip");
+    const rawCfIp = request.headers.get("cf-connecting-ip");
+    const rawIp = rawCfIp || rawForwardedIp || rawRealIp || "";
+    const clientIp = rawIp.split(",")[0].trim().replace(/^\[|\]$/g, "").split(":")[0];
+    const isLocalIp = !clientIp || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost";
+
     // Fetch geolocation data from IP
     let locationData = {
       city: "Unknown",
@@ -33,17 +40,34 @@ export async function POST(request) {
     };
 
     try {
-      // Use ip-api.com for geolocation (or use ipify + geolocation service)
-      const ipResponse = await fetch("https://ipapi.co/json/");
+      const ipLookupUrl = isLocalIp
+        ? "https://ipapi.co/json/"
+        : `http://ip-api.com/json/${clientIp}?fields=status,city,regionName,country,lat,lon,query`;
+
+      const ipResponse = await fetch(ipLookupUrl, {
+        headers: { "User-Agent": "QuickFynd-LocationTracker" }
+      });
+
       if (ipResponse.ok) {
         const geoData = await ipResponse.json();
-        locationData = {
-          city: geoData.city || "Unknown",
-          state: geoData.region || "Unknown",
-          country: geoData.country_name || "Unknown",
-          latitude: geoData.latitude,
-          longitude: geoData.longitude,
-        };
+
+        if (!isLocalIp && geoData.status === "success") {
+          locationData = {
+            city: geoData.city || "Unknown",
+            state: geoData.regionName || "Unknown",
+            country: geoData.country || "Unknown",
+            latitude: geoData.lat ?? null,
+            longitude: geoData.lon ?? null,
+          };
+        } else if (isLocalIp) {
+          locationData = {
+            city: geoData.city || "Unknown",
+            state: geoData.region || "Unknown",
+            country: geoData.country_name || "Unknown",
+            latitude: geoData.latitude ?? null,
+            longitude: geoData.longitude ?? null,
+          };
+        }
       }
     } catch (geoError) {
       console.log("Geolocation fetch error:", geoError.message);
@@ -56,14 +80,9 @@ export async function POST(request) {
       : "Desktop";
     const browser = getBrowserInfo(userAgent);
 
-    const clientIp =
-      request.headers.get("x-forwarded-for")?.split(",")[0] ||
-      request.headers.get("x-real-ip") ||
-      "Unknown";
-
     const trackingData = {
       timestamp: new Date(),
-      ip: clientIp,
+      ip: isLocalIp ? "Unknown" : clientIp,
       city: locationData.city,
       state: locationData.state,
       country: locationData.country,
