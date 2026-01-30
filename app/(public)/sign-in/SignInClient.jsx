@@ -21,7 +21,9 @@ export default function SignInClient() {
       await signInWithPopup(auth, googleProvider)
       router.push(redirect)
     } catch (err) {
-      let errorMessage = 'Sign-in failed';\n      \n      if (err.code === 'auth/popup-closed-by-user') {
+      let errorMessage = 'Sign-in failed';
+      
+      if (err.code === 'auth/popup-closed-by-user') {
         errorMessage = 'Sign-in cancelled. Please try again.';
       } else if (err.code === 'auth/popup-blocked') {
         errorMessage = 'Pop-up blocked. Please allow pop-ups and try again.';
