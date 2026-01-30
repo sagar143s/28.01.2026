@@ -60,12 +60,17 @@ export async function GET(request) {
     const results = [];
     for (const customer of customers) {
       try {
-        const htmlContent = template.template(products);
+        const htmlContent = template.template(products, customer.email);
         
         await sendMail({
           to: customer.email,
           subject: template.subject,
-          html: htmlContent
+          html: htmlContent,
+          tags: [{ name: 'category', value: 'promotional' }],
+          headers: {
+            'List-Unsubscribe': `<${process.env.NEXT_PUBLIC_BASE_URL || 'https://quickfynd.com'}/profile/settings?unsubscribe=promotional&email=${encodeURIComponent(customer.email)}>`,
+            'X-Campaign': template.id
+          }
         });
 
         if (storeObjectId) {
@@ -209,12 +214,17 @@ export async function POST(request) {
     const results = [];
     for (const customer of customers) {
       try {
-        const htmlContent = template.template(products);
+        const htmlContent = template.template(products, customer.email);
         
         await sendMail({
           to: customer.email,
           subject: template.subject,
-          html: htmlContent
+          html: htmlContent,
+          tags: [{ name: 'category', value: 'promotional' }],
+          headers: {
+            'List-Unsubscribe': `<${process.env.NEXT_PUBLIC_BASE_URL || 'https://quickfynd.com'}/profile/settings?unsubscribe=promotional&email=${encodeURIComponent(customer.email)}>`,
+            'X-Campaign': template.id
+          }
         });
 
         if (storeObjectId) {
