@@ -75,30 +75,16 @@ function ShopContent() {
                     const productCategorySlug = productCategory.replace(/[^\w\s]/g, '').replace(/\s+/g, '-').toLowerCase();
                     const productWords = normalizedProductCat.split(' ').filter(w => w.length > 0);
                     
-                    // Multiple matching strategies
+                    // Strict matching strategies to avoid cross-category matches
                     const exactMatch = productCategorySlug === categorySlug;
                     const normalizedMatch = normalizedProductCat === normalizedSearchCat;
-                    const containsMatch = normalizedProductCat.includes(normalizedSearchCat) || 
-                                         normalizedSearchCat.includes(normalizedProductCat);
                     
-                    // Check if all search words appear in product category
+                    // Check if all search words appear as full words in product category
                     const allWordsMatch = searchWords.length > 0 && searchWords.every(searchWord => 
-                        productWords.some(productWord => 
-                            productWord.includes(searchWord) || 
-                            searchWord.includes(productWord) ||
-                            productWord === searchWord
-                        )
+                        productWords.some(productWord => productWord === searchWord)
                     );
                     
-                    // Check if at least half of the words match
-                    const partialWordsMatch = searchWords.length > 1 && 
-                        searchWords.filter(searchWord => 
-                            productWords.some(productWord => 
-                                productWord.includes(searchWord) || searchWord.includes(productWord)
-                            )
-                        ).length >= Math.ceil(searchWords.length / 2);
-                    
-                    return exactMatch || normalizedMatch || containsMatch || allWordsMatch || partialWordsMatch;
+                    return exactMatch || normalizedMatch || allWordsMatch;
                 });
                 
                 if (!hasMatchingCategory) {
