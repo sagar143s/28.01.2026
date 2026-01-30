@@ -1,12 +1,16 @@
 'use client';
-import React, { useMemo } from 'react';
-import { GoogleMap, LoadScript, MarkerF, InfoWindowF } from '@react-google-maps/api';
-import { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { GoogleMap, MarkerF, InfoWindowF, useJsApiLoader } from '@react-google-maps/api';
 
 export default function CustomerLocationMap({ locations = [] }) {
   const [selectedMarker, setSelectedMarker] = useState(null);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'quickfynd-google-maps',
+    googleMapsApiKey: apiKey || '',
+  });
 
   if (!apiKey) {
     return (
@@ -82,7 +86,11 @@ export default function CustomerLocationMap({ locations = [] }) {
         </div>
       </div>
 
-      <LoadScript googleMapsApiKey={apiKey}>
+      {!isLoaded ? (
+        <div className="p-6 bg-gray-50 border border-gray-200 rounded-lg text-gray-600">
+          <p>Loading map...</p>
+        </div>
+      ) : (
         <GoogleMap mapContainerClassName="w-full rounded-lg border border-gray-200 shadow-sm" mapContainerStyle={{ height: '500px' }} options={mapOptions}>
           {Object.values(locationGroups).map((group, idx) => (
             <MarkerF
@@ -142,7 +150,7 @@ export default function CustomerLocationMap({ locations = [] }) {
             </MarkerF>
           ))}
         </GoogleMap>
-      </LoadScript>
+      )}
 
       {/* Location Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

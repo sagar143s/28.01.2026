@@ -18,7 +18,7 @@ export default function CustomerLocationAnalytics() {
     fetchLocationData();
     const intervalId = setInterval(() => {
       fetchLocationData();
-    }, 5000);
+    }, 25000);
 
     return () => clearInterval(intervalId);
   }, [filter]);

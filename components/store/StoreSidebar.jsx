@@ -1,6 +1,6 @@
 "use client"
 import { usePathname } from "next/navigation"
-import { HomeIcon, LayoutListIcon, SquarePenIcon, SquarePlusIcon, StarIcon, FolderIcon, TicketIcon, TruckIcon, RefreshCw, User as UserIcon, Users as UsersIcon, MessageSquare, Sparkles, BellIcon } from "lucide-react"
+import { HomeIcon, LayoutListIcon, SquarePenIcon, SquarePlusIcon, StarIcon, FolderIcon, TicketIcon, TruckIcon, RefreshCw, User as UserIcon, Users as UsersIcon, MessageSquare, Sparkles, BellIcon, MailIcon } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useEffect } from "react";
@@ -26,6 +26,7 @@ const StoreSidebar = ({storeInfo}) => {
         { name: 'Support Tickets', href: '/store/tickets', icon: MessageSquare },
         { name: 'Contact Us Messages', href: '/store#contact-messages', icon: StarIcon },
         { name: 'Product Notifications', href: '/store/product-notifications', icon: BellIcon },
+        { name: 'Promotional Emails', href: '/store/promotional-emails', icon: MailIcon },
     ]
 
     const featuredProductsLink = { name: 'Featured Products', href: '/store/featured-products', icon: Sparkles }

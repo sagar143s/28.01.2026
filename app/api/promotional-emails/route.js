@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import Product from '@/models/Product';
+import Store from '@/models/Store';
+import EmailHistory from '@/models/EmailHistory';
 import { sendMail } from '@/lib/email';
 import { getRandomTemplate, getTemplateById, getAllTemplateIds } from '@/lib/promotionalEmailTemplates';
+import mongoose from 'mongoose';
 
 /**
  * API endpoint to send promotional emails
@@ -18,6 +21,8 @@ export async function GET(request) {
     
     // Connect to database
     await connectDB();
+
+    const storeObjectId = await resolveStoreObjectId();
     
     // Get customers (limit to avoid spam)
     const customers = await User.find({ 
@@ -62,6 +67,23 @@ export async function GET(request) {
           subject: template.subject,
           html: htmlContent
         });
+
+        if (storeObjectId) {
+          try {
+            await EmailHistory.create({
+              storeId: storeObjectId,
+              type: 'promotional',
+              recipientEmail: customer.email,
+              recipientName: customer.name || 'Customer',
+              subject: template.subject,
+              status: 'sent',
+              customMessage: `template:${template.id}`,
+              sentAt: new Date()
+            });
+          } catch (historyError) {
+            console.error('[promotional-email] Failed to save email history:', historyError);
+          }
+        }
         
         results.push({ 
           email: customer.email, 
@@ -70,6 +92,23 @@ export async function GET(request) {
         });
       } catch (error) {
         console.error(`Failed to send email to ${customer.email}:`, error);
+        if (storeObjectId) {
+          try {
+            await EmailHistory.create({
+              storeId: storeObjectId,
+              type: 'promotional',
+              recipientEmail: customer.email,
+              recipientName: customer.name || 'Customer',
+              subject: template.subject,
+              status: 'failed',
+              errorMessage: error.message || 'Unknown error',
+              customMessage: `template:${template.id}`,
+              sentAt: new Date()
+            });
+          } catch (historyError) {
+            console.error('[promotional-email] Failed to save failed email history:', historyError);
+          }
+        }
         results.push({ 
           email: customer.email, 
           status: 'failed',
@@ -119,6 +158,8 @@ export async function POST(request) {
     }
 
     await connectDB();
+
+    const storeObjectId = await resolveStoreObjectId();
 
     // Get customers based on provided emails or fetch from database
     let customers;
@@ -172,6 +213,23 @@ export async function POST(request) {
           subject: template.subject,
           html: htmlContent
         });
+
+        if (storeObjectId) {
+          try {
+            await EmailHistory.create({
+              storeId: storeObjectId,
+              type: 'promotional',
+              recipientEmail: customer.email,
+              recipientName: customer.name || 'Customer',
+              subject: template.subject,
+              status: 'sent',
+              customMessage: `template:${template.id}`,
+              sentAt: new Date()
+            });
+          } catch (historyError) {
+            console.error('[promotional-email] Failed to save email history:', historyError);
+          }
+        }
         
         results.push({ 
           email: customer.email, 
@@ -183,6 +241,23 @@ export async function POST(request) {
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         console.error(`Failed to send email to ${customer.email}:`, error);
+        if (storeObjectId) {
+          try {
+            await EmailHistory.create({
+              storeId: storeObjectId,
+              type: 'promotional',
+              recipientEmail: customer.email,
+              recipientName: customer.name || 'Customer',
+              subject: template.subject,
+              status: 'failed',
+              errorMessage: error.message || 'Unknown error',
+              customMessage: `template:${template.id}`,
+              sentAt: new Date()
+            });
+          } catch (historyError) {
+            console.error('[promotional-email] Failed to save failed email history:', historyError);
+          }
+        }
         results.push({ 
           email: customer.email, 
           status: 'failed',
@@ -213,4 +288,15 @@ export async function POST(request) {
       { status: 500 }
     );
   }
+}
+
+async function resolveStoreObjectId() {
+  const envStoreId = process.env.PROMOTIONAL_STORE_ID;
+  let storeId = envStoreId;
+  if (!storeId) {
+    const store = await Store.findOne({}).select('_id').lean();
+    storeId = store?._id?.toString();
+  }
+  if (!storeId) return null;
+  return new mongoose.Types.ObjectId(storeId);
 }

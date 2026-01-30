@@ -71,8 +71,10 @@ export async function GET(request) {
     console.log('[email-history] Total records:', total);
 
     // Get summary stats
+    const statsMatch = { storeId: storeObjectId };
+    if (type) statsMatch.type = type;
     const stats = await EmailHistory.aggregate([
-      { $match: { storeId: storeObjectId } },
+      { $match: statsMatch },
       {
         $group: {
           _id: '$status',

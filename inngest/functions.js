@@ -2,6 +2,9 @@ import {inngest} from './client'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
 import Coupon from '@/models/Coupon'
+import Store from '@/models/Store'
+import EmailHistory from '@/models/EmailHistory'
+import mongoose from 'mongoose'
 
 // Inngest Function to save user data to a database
 export const syncUserCreation = inngest.createFunction(
@@ -67,6 +70,18 @@ export const sendDailyPromotionalEmail = inngest.createFunction(
     { id: 'send-daily-promotional-email' },
     { cron: '30 16 * * *' },
     async ({ step }) => {
+        const storeObjectId = await step.run('resolve-store-id', async () => {
+            await connectDB();
+            const envStoreId = process.env.PROMOTIONAL_STORE_ID;
+            let storeId = envStoreId;
+            if (!storeId) {
+                const store = await Store.findOne({}).select('_id').lean();
+                storeId = store?._id?.toString();
+            }
+            if (!storeId) return null;
+            return new mongoose.Types.ObjectId(storeId);
+        });
+
         const template = await step.run('get-random-template', async () => {
             const { getRandomTemplate } = await import('@/lib/promotionalEmailTemplates');
             return getRandomTemplate();
@@ -88,13 +103,46 @@ export const sendDailyPromotionalEmail = inngest.createFunction(
             for (const customer of customers) {
                 try {
                     await sendMail({ to: customer.email, subject: template.subject, html: template.template(products) });
+                    if (storeObjectId) {
+                        try {
+                            await EmailHistory.create({
+                                storeId: storeObjectId,
+                                type: 'promotional',
+                                recipientEmail: customer.email,
+                                recipientName: customer.name || 'Customer',
+                                subject: template.subject,
+                                status: 'sent',
+                                customMessage: `template:${template.id}`,
+                                sentAt: new Date()
+                            });
+                        } catch (historyError) {
+                            console.error('[promotional-email] Failed to save email history:', historyError);
+                        }
+                    }
                     results.push({ email: customer.email, status: 'sent', template: template.id });
                 } catch (error) {
+                    if (storeObjectId) {
+                        try {
+                            await EmailHistory.create({
+                                storeId: storeObjectId,
+                                type: 'promotional',
+                                recipientEmail: customer.email,
+                                recipientName: customer.name || 'Customer',
+                                subject: template.subject,
+                                status: 'failed',
+                                errorMessage: error.message || 'Unknown error',
+                                customMessage: `template:${template.id}`,
+                                sentAt: new Date()
+                            });
+                        } catch (historyError) {
+                            console.error('[promotional-email] Failed to save failed email history:', historyError);
+                        }
+                    }
                     results.push({ email: customer.email, status: 'failed', error: error.message });
                 }
             }
             return results;
         });
-        return { template: template.id, totalCustomers: customers.length, emailsSent: emailResults.filter(r => r.status === 'sent').length };
+        return { template: template.id, totalCustomers: customers.length, emailsSent: emailResults.filter(r => r.status === 'sent').length, emailsFailed: emailResults.filter(r => r.status === 'failed').length };
     }
 )
