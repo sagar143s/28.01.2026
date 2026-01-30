@@ -90,6 +90,9 @@ export async function GET(request) {
           status: 'sent',
           template: template.id 
         });
+        
+        // Rate limiting: Wait 600ms between emails (max 2 requests/second)
+        await new Promise(resolve => setTimeout(resolve, 600));
       } catch (error) {
         console.error(`Failed to send email to ${customer.email}:`, error);
         if (storeObjectId) {
@@ -237,8 +240,8 @@ export async function POST(request) {
           template: template.id 
         });
         
-        // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Rate limiting: Wait 600ms between emails (max 2 requests/second)
+        await new Promise(resolve => setTimeout(resolve, 600));
       } catch (error) {
         console.error(`Failed to send email to ${customer.email}:`, error);
         if (storeObjectId) {
