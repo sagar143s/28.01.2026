@@ -94,7 +94,31 @@ export async function GET(request){
                     }
                 }
             },
-            { $project: { categoryData: 0 } }, // Remove temp field
+            { 
+                $project: { 
+                    categoryData: 0, // Remove temp field
+                    name: 1,
+                    slug: 1,
+                    description: 1,
+                    shortDescription: 1,
+                    mrp: 1,
+                    price: 1,
+                    images: 1,
+                    category: 1,
+                    categories: 1,
+                    sku: 1,
+                    hasVariants: 1,
+                    variants: 1,
+                    attributes: 1,
+                    fastDelivery: 1,
+                    stockQuantity: 1,
+                    imageAspectRatio: 1,
+                    createdAt: 1,
+                    discount: 1,
+                    label: 1,
+                    labelType: 1
+                }
+            },
             { 
                 $addFields: {
                     label: {
@@ -132,7 +156,6 @@ export async function GET(request){
             productId: { $in: productIds }, 
             approved: true 
         }).select('productId rating').lean();
-        
         // Create a map of productId -> ratings for O(1) lookup
         const ratingsMap = {};
         allRatings.forEach(review => {
