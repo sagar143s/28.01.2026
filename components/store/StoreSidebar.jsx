@@ -1,6 +1,6 @@
 "use client"
 import { usePathname } from "next/navigation"
-import { HomeIcon, LayoutListIcon, SquarePenIcon, SquarePlusIcon, StarIcon, FolderIcon, TicketIcon, TruckIcon, RefreshCw, User as UserIcon, Users as UsersIcon, MessageSquare, Sparkles, BellIcon, MailIcon } from "lucide-react"
+import { HomeIcon, LayoutListIcon, SquarePenIcon, SquarePlusIcon, StarIcon, FolderIcon, TicketIcon, TruckIcon, RefreshCw, User as UserIcon, Users as UsersIcon, MessageSquare, Sparkles, BellIcon, MailIcon, Clock } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useState, useEffect } from "react";
@@ -31,6 +31,7 @@ const StoreSidebar = ({storeInfo}) => {
 
     const featuredProductsLink = { name: 'Featured Products', href: '/store/featured-products', icon: Sparkles }
     const carouselSliderLink = { name: 'Carousel Slider', href: '/store/carousel-slider', icon: StarIcon }
+    const dealsLink = { name: 'Deals of the Day', href: '/store/deals', icon: Clock }
 
     return (
         <div className="inline-flex h-full flex-col justify-between border-r border-slate-200 sm:min-w-60">
@@ -70,6 +71,12 @@ const StoreSidebar = ({storeInfo}) => {
                         <carouselSliderLink.icon size={18} className="sm:ml-5" />
                         <p className="max-sm:hidden">{carouselSliderLink.name}</p>
                         {pathname === carouselSliderLink.href && <span className="absolute bg-green-500 right-0 top-1.5 bottom-1.5 w-1 sm:w-1.5 rounded-l"></span>}
+                    </Link>
+                    {/* Deals of the Day Link */}
+                    <Link href={dealsLink.href} className={`relative flex items-center gap-3 text-slate-500 hover:bg-slate-50 p-2.5 transition ${pathname === dealsLink.href && 'bg-slate-100 sm:text-slate-600'}`}>
+                        <dealsLink.icon size={18} className="sm:ml-5" />
+                        <p className="max-sm:hidden">{dealsLink.name}</p>
+                        {pathname === dealsLink.href && <span className="absolute bg-green-500 right-0 top-1.5 bottom-1.5 w-1 sm:w-1.5 rounded-l"></span>}
                     </Link>
                 </div>
             </div>
