@@ -62,23 +62,71 @@ export async function GET(request){
         const offset = parseInt(searchParams.get('offset') || '0', 10);
         const fastDelivery = searchParams.get('fastDelivery');
         
-        // Build query
-        const query = { inStock: true };
+        // OPTIMIZED: Use MongoDB aggregation pipeline instead of find + populate
+        const matchStage = { inStock: true };
         if (fastDelivery === 'true') {
-            query.fastDelivery = true;
+            matchStage.fastDelivery = true;
         }
-        
-        // Optimized query with field selection
-        let products = await Product.find(query)
-            .select('name slug description shortDescription mrp price images category categories sku hasVariants variants attributes fastDelivery stockQuantity imageAspectRatio createdAt')
-            .populate('category', 'name slug') // Populate category with name and slug
-            .sort({ createdAt: -1 })
-            .skip(offset)
-            .limit(limit)
-            .lean()
-            .exec();
 
-        // FIX N+1: Batch fetch all ratings in ONE query (not per product)
+        const aggregationPipeline = [
+            { $match: matchStage },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'category',
+                    foreignField: '_id',
+                    as: 'categoryData'
+                }
+            },
+            {
+                $addFields: {
+                    category: { $arrayElemAt: ['$categoryData.name', 0] },
+                    discount: {
+                        $cond: [
+                            { $and: [
+                                { $gt: ['$mrp', '$price'] },
+                                { $ne: ['$mrp', null] },
+                                { $ne: ['$price', null] }
+                            ] },
+                            { $round: [{ $multiply: [{ $divide: [{ $subtract: ['$mrp', '$price'] }, '$mrp'] }, 100] }] },
+                            null
+                        ]
+                    }
+                }
+            },
+            { $project: { categoryData: 0 } }, // Remove temp field
+            { 
+                $addFields: {
+                    label: {
+                        $cond: [
+                            { $gte: ['$discount', 50] },
+                            { $concat: ['Min. ', { $toString: '$discount' }, '% Off'] },
+                            {
+                                $cond: [
+                                    { $gt: ['$discount', 0] },
+                                    { $concat: [{ $toString: '$discount' }, '% Off'] },
+                                    null
+                                ]
+                            }
+                        ]
+                    },
+                    labelType: {
+                        $cond: [
+                            { $gt: ['$discount', 0] },
+                            'offer',
+                            null
+                        ]
+                    }
+                }
+            },
+            { $sort: { createdAt: -1 } },
+            { $skip: offset },
+            { $limit: limit }
+        ];
+
+        const products = await Product.aggregate(aggregationPipeline).lean().exec();
+
+        // FIX N+1: Batch fetch all ratings in ONE query
         const productIds = products.map(p => String(p._id));
         const allRatings = await Rating.find({ 
             productId: { $in: productIds }, 
@@ -94,62 +142,29 @@ export async function GET(request){
             ratingsMap[review.productId].push(review.rating);
         });
 
-        // Add discount label and review stats - NO MORE INDIVIDUAL QUERIES!
-        products = products.map(product => {
+        // Enrich with ratings - synchronous, no async overhead
+        const enrichedProducts = products.map(product => {
             try {
-                let label = null;
-                let labelType = null;
-                if (typeof product.mrp === 'number' && typeof product.price === 'number' && product.mrp > product.price) {
-                    const discount = Math.round(((product.mrp - product.price) / product.mrp) * 100);
-                    if (discount >= 50) {
-                        label = `Min. ${discount}% Off`;
-                        labelType = 'offer';
-                    } else if (discount > 0) {
-                        label = `${discount}% Off`;
-                        labelType = 'offer';
-                    }
-                }
-
-                // Get cached ratings for this product - O(1) lookup!
                 const reviews = ratingsMap[String(product._id)] || [];
                 const ratingCount = reviews.length;
                 const averageRating = ratingCount > 0 ? (reviews.reduce((sum, r) => sum + r, 0) / ratingCount) : 0;
 
-                // Transform populated category back to string name
-                const categoryName = product.category?.name || product.category || null;
-
                 return {
                     ...product,
-                    category: categoryName,
-                    label,
-                    labelType,
                     ratingCount,
                     averageRating
                 };
             } catch (err) {
-                console.error('Error mapping product review stats:', err);
-                const categoryName = product.category?.name || product.category || null;
-                
+                console.error('Error enriching product:', err);
                 return {
                     ...product,
-                    category: categoryName,
-                    label: null,
-                    labelType: null,
                     ratingCount: 0,
-                    averageRating: 0,
-                    reviewError: err.message
+                    averageRating: 0
                 };
             }
         });
 
-        // Sort based on the sortBy parameter
-        if (sortBy === 'orders') {
-            // Placeholder: implement order-based sorting if you have order data
-        } else if (sortBy === 'rating') {
-            // Placeholder: implement rating-based sorting if you have rating data
-        }
-
-        return NextResponse.json({ products }, {
+        return NextResponse.json({ products: enrichedProducts }, {
             headers: {
                 'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=1200' // 10 min cache, 20 min stale
             }
